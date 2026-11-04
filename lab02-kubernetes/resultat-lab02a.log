@@ -1,0 +1,389 @@
+===== lab02a - Wed Nov  4 12:32:37 PM UTC 2026 =====
+$ mkdir -p /home/onyxia/work/lab02
+$ cd /home/onyxia/work/lab02
+$ kubectl get nodes
+Error from server (Forbidden): nodes is forbidden: User "system:serviceaccount:user-m-anane-ece:vscode-pyspark-123865" cannot list resource "nodes" in API group "" at the cluster scope
+$ kubectl top pods -A --sort-by cpu --sum=true
+Error from server (Forbidden): pods.metrics.k8s.io is forbidden: User "system:serviceaccount:user-m-anane-ece:vscode-pyspark-123865" cannot list resource "pods" in API group "metrics.k8s.io" at the cluster scope
+$ kubectl top pods --sort-by cpu --sum=true
+NAME                      CPU(cores)   MEMORY(bytes)   
+vscode-pyspark-123865-0   51m          644Mi           
+                          ________     ________        
+                          51m          644Mi           
+$ kubectl get pods -n kube-system
+Error from server (Forbidden): pods is forbidden: User "system:serviceaccount:user-m-anane-ece:vscode-pyspark-123865" cannot list resource "pods" in API group "" in the namespace "kube-system"
+$ kubectl create deployment kubernetes-bootcamp --image=gcr.io/google-samples/kubernetes-bootcamp:v1
+deployment.apps/kubernetes-bootcamp created
+$ kubectl set resources deployment kubernetes-bootcamp --requests=cpu=20m,memory=32Mi --limits=cpu=100m,memory=128Mi
+deployment.apps/kubernetes-bootcamp resource requirements updated
+$ kubectl rollout status deployment/kubernetes-bootcamp --timeout=180s
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 0 of 1 updated replicas are available...
+deployment "kubernetes-bootcamp" successfully rolled out
+$ kubectl get pods
+NAME                                   READY   STATUS    RESTARTS   AGE
+kubernetes-bootcamp-5cb764dc58-7v5tn   1/1     Running   0          4s
+vscode-pyspark-123865-0                1/1     Running   0          15m
+$$ kubectl get pods -l app=kubernetes-bootcamp -o 'jsonpath={.items[0].metadata.name}'
+$ POD_NAME=kubernetes-bootcamp-5cb764dc58-7v5tn
+$ echo POD_NAME=kubernetes-bootcamp-5cb764dc58-7v5tn
+POD_NAME=kubernetes-bootcamp-5cb764dc58-7v5tn
+$ kubectl logs kubernetes-bootcamp-5cb764dc58-7v5tn
+$ kubectl describe pod kubernetes-bootcamp-5cb764dc58-7v5tn
+Name:             kubernetes-bootcamp-5cb764dc58-7v5tn
+Namespace:        user-m-anane-ece
+Priority:         0
+Service Account:  default
+Node:             compute-03/10.10.0.23
+Start Time:       Wed, 04 Nov 2026 12:32:38 +0000
+Labels:           app=kubernetes-bootcamp
+                  pod-template-hash=5cb764dc58
+Annotations:      kuik.enix.io/original-images: {"kubernetes-bootcamp":"gcr.io/google-samples/kubernetes-bootcamp:v1"}
+Status:           Running
+IP:               10.0.0.130
+IPs:
+  IP:           10.0.0.130
+Controlled By:  ReplicaSet/kubernetes-bootcamp-5cb764dc58
+Containers:
+  kubernetes-bootcamp:
+    Container ID:   containerd://f8c77010f9b7fb93551ed3ded824226ebc86a6983103ce9601d3c4d4aec62fd2
+    Image:          gcr.io/google-samples/kubernetes-bootcamp:v1
+    Image ID:       gcr.io/google-samples/kubernetes-bootcamp@sha256:0d6b8ee63bb57c5f5b6156f446b3bc3b3c143d233037f3a2f00e279c8fcc64af
+    Port:           <none>
+    Host Port:      <none>
+    State:          Running
+      Started:      Wed, 04 Nov 2026 12:32:42 +0000
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     100m
+      memory:  128Mi
+    Requests:
+      cpu:        20m
+      memory:     32Mi
+    Environment:  <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-6jrck (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  kube-api-access-6jrck:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  4s    default-scheduler  Successfully assigned user-m-anane-ece/kubernetes-bootcamp-5cb764dc58-7v5tn to compute-03
+  Normal  Pulled     1s    kubelet            spec.containers{kubernetes-bootcamp}: Container image "gcr.io/google-samples/kubernetes-bootcamp:v1" already present on machine and can be accessed by the pod
+  Normal  Created    1s    kubelet            spec.containers{kubernetes-bootcamp}: Container created
+  Normal  Started    0s    kubelet            spec.containers{kubernetes-bootcamp}: Container started
+$ kubectl exec kubernetes-bootcamp-5cb764dc58-7v5tn -- cat /etc/os-release
+PRETTY_NAME="Debian GNU/Linux 8 (jessie)"
+NAME="Debian GNU/Linux"
+VERSION_ID="8"
+VERSION="8 (jessie)"
+ID=debian
+HOME_URL="http://www.debian.org/"
+SUPPORT_URL="http://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+$ kubectl exec kubernetes-bootcamp-5cb764dc58-7v5tn -- ls -la /
+total 460
+drwxr-xr-x    1 root root   4096 Nov  4 12:32 .
+drwxr-xr-x    1 root root   4096 Nov  4 12:32 ..
+drwxr-xr-x    2 root root   4096 Jun  8  2016 bin
+drwxr-xr-x    2 root root   4096 May 30  2016 boot
+-rw-------    1 root root 393216 Jun  9  2016 core
+drwxr-xr-x    5 root root    360 Nov  4 12:32 dev
+drwxr-xr-x    1 root root   4096 Jul 22  2016 etc
+drwxr-xr-x    2 root root   4096 May 30  2016 home
+drwxr-xr-x    1 root root   4096 Jun  9  2016 lib
+drwxr-xr-x    2 root root   4096 Jun  8  2016 lib64
+drwxr-xr-x    2 root root   4096 Jun  8  2016 media
+drwxr-xr-x    2 root root   4096 Jun  8  2016 mnt
+drwxr-xr-x    2 root root   4096 Jun  8  2016 opt
+dr-xr-xr-x 1388 root root      0 Nov  4 12:32 proc
+drwx------    1 root root   4096 Jul 22  2016 root
+drwxr-xr-x    1 root root   4096 Nov  4 12:32 run
+drwxr-xr-x    2 root root   4096 Jun  8  2016 sbin
+-rw-r--r--    1 root root    742 Jul 29  2016 server.js
+drwxr-xr-x    2 root root   4096 Jun  8  2016 srv
+dr-xr-xr-x   13 root root      0 Nov  4 12:32 sys
+drwxrwxrwt    1 root root   4096 Jul 22  2016 tmp
+drwxr-xr-x    1 root root   4096 Jul 22  2016 usr
+drwxr-xr-x    1 root root   4096 Jul 22  2016 var
+$ kubectl exec kubernetes-bootcamp-5cb764dc58-7v5tn -- cat /server.js
+var http = require('http');
+var requests=0;
+var podname= process.env.HOSTNAME;
+var startTime;
+var host;
+var handleRequest = function(request, response) {
+  response.setHeader('Content-Type', 'text/plain');
+  response.writeHead(200);
+  response.write("Hello Kubernetes bootcamp! | Running on: ");
+  response.write(host);
+  response.end(" | v=1\n");
+  console.log("Running On:" ,host, "| Total Requests:", ++requests,"| App Uptime:", (new Date() - startTime)/1000 , "seconds", "| Log Time:",new Date());
+}
+var www = http.createServer(handleRequest);
+www.listen(8080,function () {
+    startTime = new Date();;
+    host = process.env.HOSTNAME;
+    console.log ("Kubernetes Bootcamp App Started At:",startTime, "| Running On: " ,host, "\n" );
+});
+$ kubectl exec kubernetes-bootcamp-5cb764dc58-7v5tn -- curl -s localhost:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-5cb764dc58-7v5tn | v=1
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ echo '-> pas accessible sans Service'
+-> pas accessible sans Service
+$ kubectl expose deployments/kubernetes-bootcamp --type=NodePort --port 8080
+service/kubernetes-bootcamp exposed
+$ kubectl get services
+NAME                    TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)             AGE
+kubernetes-bootcamp     NodePort    10.109.89.180   <none>        8080:31618/TCP      0s
+vscode-pyspark-123865   ClusterIP   None            <none>        8080/TCP,4040/TCP   15m
+$ kubectl describe service kubernetes-bootcamp
+Name:                     kubernetes-bootcamp
+Namespace:                user-m-anane-ece
+Labels:                   app=kubernetes-bootcamp
+Annotations:              <none>
+Selector:                 app=kubernetes-bootcamp
+Type:                     NodePort
+IP Family Policy:         SingleStack
+IP Families:              IPv4
+IP:                       10.109.89.180
+IPs:                      10.109.89.180
+Port:                     <unset>  8080/TCP
+TargetPort:               8080/TCP
+NodePort:                 <unset>  31618/TCP
+Endpoints:                10.0.0.130:8080
+Session Affinity:         None
+External Traffic Policy:  Cluster
+Internal Traffic Policy:  Cluster
+Events:                   <none>
+$ sleep 3
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-5cb764dc58-7v5tn | v=1
+$ kubectl scale deployments/kubernetes-bootcamp --replicas=5
+deployment.apps/kubernetes-bootcamp scaled
+$ kubectl rollout status deployment/kubernetes-bootcamp --timeout=180s
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 of 5 updated replicas are available...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 2 of 5 updated replicas are available...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 3 of 5 updated replicas are available...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 4 of 5 updated replicas are available...
+deployment "kubernetes-bootcamp" successfully rolled out
+$ kubectl get pods -o wide
+NAME                                   READY   STATUS    RESTARTS   AGE   IP           NODE         NOMINATED NODE   READINESS GATES
+kubernetes-bootcamp-5cb764dc58-7v5tn   1/1     Running   0          17s   10.0.0.130   compute-03   <none>           <none>
+kubernetes-bootcamp-5cb764dc58-9t2cp   1/1     Running   0          4s    10.0.3.201   control-03   <none>           <none>
+kubernetes-bootcamp-5cb764dc58-kb5q5   1/1     Running   0          4s    10.0.0.74    compute-03   <none>           <none>
+kubernetes-bootcamp-5cb764dc58-n6l9j   1/1     Running   0          4s    10.0.7.129   compute-02   <none>           <none>
+kubernetes-bootcamp-5cb764dc58-sr6ht   1/1     Running   0          4s    10.0.7.140   compute-02   <none>           <none>
+vscode-pyspark-123865-0                1/1     Running   0          15m   10.0.7.194   compute-02   <none>           <none>
+$ kubectl get deployments
+NAME                  READY   UP-TO-DATE   AVAILABLE   AGE
+kubernetes-bootcamp   5/5     5            5           17s
+$ for i in 1 2 3 4 5 6 7 8
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ for i in 1 2 3 4 5 6 7 8
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ for i in 1 2 3 4 5 6 7 8
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ for i in 1 2 3 4 5 6 7 8
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ for i in 1 2 3 4 5 6 7 8
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ for i in 1 2 3 4 5 6 7 8
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ for i in 1 2 3 4 5 6 7 8
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ for i in 1 2 3 4 5 6 7 8
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ kubectl scale deployments/kubernetes-bootcamp --replicas=2
+deployment.apps/kubernetes-bootcamp scaled
+$ sleep 15
+$ kubectl get pods
+NAME                                   READY   STATUS        RESTARTS   AGE
+kubernetes-bootcamp-5cb764dc58-7v5tn   1/1     Running       0          32s
+kubernetes-bootcamp-5cb764dc58-9t2cp   1/1     Running       0          19s
+kubernetes-bootcamp-5cb764dc58-kb5q5   1/1     Terminating   0          19s
+kubernetes-bootcamp-5cb764dc58-n6l9j   1/1     Terminating   0          19s
+kubernetes-bootcamp-5cb764dc58-sr6ht   1/1     Terminating   0          19s
+vscode-pyspark-123865-0                1/1     Running       0          16m
+$ kubectl set image deployments/kubernetes-bootcamp kubernetes-bootcamp=jocatalin/kubernetes-bootcamp:v2
+deployment.apps/kubernetes-bootcamp image updated
+$ kubectl rollout status deployment/kubernetes-bootcamp --timeout=180s
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 old replicas are pending termination...
+deployment "kubernetes-bootcamp" successfully rolled out
+$ for i in 1 2 3 4
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-b977ff9c6-tgtd8 | v=2
+$ for i in 1 2 3 4
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-b977ff9c6-tgtd8 | v=2
+$ for i in 1 2 3 4
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-b977ff9c6-tgtd8 | v=2
+$ for i in 1 2 3 4
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+$ kubectl set image deployments/kubernetes-bootcamp kubernetes-bootcamp=jocatalin/kubernetes-bootcamp:v3
+deployment.apps/kubernetes-bootcamp image updated
+$ sleep 40
+$ kubectl get pods
+NAME                                   READY   STATUS             RESTARTS   AGE
+kubernetes-bootcamp-64c495976c-5snmb   0/1     ImagePullBackOff   0          30s
+kubernetes-bootcamp-b977ff9c6-j4d6r    1/1     Running            0          46s
+kubernetes-bootcamp-b977ff9c6-tgtd8    1/1     Running            0          52s
+vscode-pyspark-123865-0                1/1     Running            0          16m
+$ kubectl rollout status deployment/kubernetes-bootcamp --timeout=10s
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 out of 2 new replicas have been updated...
+error: timed out waiting for the condition
+$ kubectl describe pods -l app=kubernetes-bootcamp
+$ grep -iE 'image:|reason|failed|back-off'
+$ sort
+$ uniq -c
+      2     Image:          jocatalin/kubernetes-bootcamp:v2
+      1     Image:          jocatalin/kubernetes-bootcamp:v3
+      1       Reason:       ErrImagePull
+$ kubectl rollout undo deployments/kubernetes-bootcamp
+deployment.apps/kubernetes-bootcamp rolled back
+$ kubectl rollout status deployment/kubernetes-bootcamp --timeout=180s
+deployment "kubernetes-bootcamp" successfully rolled out
+$ kubectl get pods
+NAME                                   READY   STATUS        RESTARTS   AGE
+kubernetes-bootcamp-64c495976c-5snmb   0/1     Terminating   0          41s
+kubernetes-bootcamp-b977ff9c6-j4d6r    1/1     Running       0          57s
+kubernetes-bootcamp-b977ff9c6-tgtd8    1/1     Running       0          63s
+vscode-pyspark-123865-0                1/1     Running       0          17m
+$ for i in 1 2 3
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-b977ff9c6-tgtd8 | v=2
+$ for i in 1 2 3
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-b977ff9c6-tgtd8 | v=2
+$ for i in 1 2 3
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-b977ff9c6-j4d6r | v=2
+$ kubectl rollout history deployments/kubernetes-bootcamp
+deployment.apps/kubernetes-bootcamp 
+REVISION  CHANGE-CAUSE
+1         <none>
+2         <none>
+4         <none>
+5         <none>
+
+$ kubectl set image deployments/kubernetes-bootcamp kubernetes-bootcamp=gcr.io/google-samples/kubernetes-bootcamp:v1
+deployment.apps/kubernetes-bootcamp image updated
+$ kubectl rollout status deployment/kubernetes-bootcamp --timeout=180s
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 old replicas are pending termination...
+deployment "kubernetes-bootcamp" successfully rolled out
+$ for i in 1 2 3
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-5cb764dc58-wtfdw | v=1
+$ for i in 1 2 3
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-b977ff9c6-j4d6r | v=2
+$ for i in 1 2 3
+$ curl -s -m 5 http://kubernetes-bootcamp:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-5cb764dc58-wtfdw | v=1
+$ kubectl delete service kubernetes-bootcamp
+service "kubernetes-bootcamp" deleted from user-m-anane-ece namespace
+$ kubectl delete deployment kubernetes-bootcamp
+deployment.apps "kubernetes-bootcamp" deleted from user-m-anane-ece namespace
+$ cat
+$ kubectl apply -f deployment.yaml
+deployment.apps/kubernetes-bootcamp created
+$ kubectl rollout status deployment/kubernetes-bootcamp --timeout=180s
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 0 of 1 updated replicas are available...
+deployment "kubernetes-bootcamp" successfully rolled out
+$ kubectl get pods
+NAME                                   READY   STATUS        RESTARTS   AGE
+kubernetes-bootcamp-5cb764dc58-wtfdw   1/1     Terminating   0          12s
+kubernetes-bootcamp-5cb764dc58-zj4jc   1/1     Terminating   0          9s
+kubernetes-bootcamp-6847766f5-sg4x8    1/1     Running       0          4s
+kubernetes-bootcamp-b977ff9c6-j4d6r    1/1     Terminating   0          69s
+kubernetes-bootcamp-b977ff9c6-tgtd8    1/1     Terminating   0          75s
+vscode-pyspark-123865-0                1/1     Running       0          17m
+$ cat
+$ kubectl apply -f service.yaml
+service/kubernetes-bootcamp-service created
+$ kubectl get services
+NAME                          TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)             AGE
+kubernetes-bootcamp-service   NodePort    10.111.75.129   <none>        8080:31623/TCP      0s
+vscode-pyspark-123865         ClusterIP   None            <none>        8080/TCP,4040/TCP   17m
+$ sleep 3
+$ curl -s -m 5 http://kubernetes-bootcamp-service:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-6847766f5-sg4x8 | v=1
+$ sed -i 's/replicas: 1/replicas: 3/' deployment.yaml
+$ kubectl apply -f deployment.yaml
+deployment.apps/kubernetes-bootcamp configured
+$ kubectl rollout status deployment/kubernetes-bootcamp --timeout=180s
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "kubernetes-bootcamp" rollout to finish: 2 of 3 updated replicas are available...
+deployment "kubernetes-bootcamp" successfully rolled out
+$ kubectl get pods
+NAME                                   READY   STATUS        RESTARTS   AGE
+kubernetes-bootcamp-5cb764dc58-wtfdw   1/1     Terminating   0          21s
+kubernetes-bootcamp-5cb764dc58-zj4jc   1/1     Terminating   0          18s
+kubernetes-bootcamp-6847766f5-s496x    1/1     Running       0          5s
+kubernetes-bootcamp-6847766f5-sg4x8    1/1     Running       0          13s
+kubernetes-bootcamp-6847766f5-t8x2m    1/1     Running       0          5s
+kubernetes-bootcamp-b977ff9c6-j4d6r    1/1     Terminating   0          78s
+kubernetes-bootcamp-b977ff9c6-tgtd8    1/1     Terminating   0          84s
+vscode-pyspark-123865-0                1/1     Running       0          17m
+$ for i in 1 2 3 4 5 6
+$ curl -s -m 5 http://kubernetes-bootcamp-service:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-6847766f5-sg4x8 | v=1
+$ for i in 1 2 3 4 5 6
+$ curl -s -m 5 http://kubernetes-bootcamp-service:8080
+$ for i in 1 2 3 4 5 6
+$ curl -s -m 5 http://kubernetes-bootcamp-service:8080
+$ for i in 1 2 3 4 5 6
+$ curl -s -m 5 http://kubernetes-bootcamp-service:8080
+$ for i in 1 2 3 4 5 6
+$ curl -s -m 5 http://kubernetes-bootcamp-service:8080
+$ for i in 1 2 3 4 5 6
+$ curl -s -m 5 http://kubernetes-bootcamp-service:8080
+Hello Kubernetes bootcamp! | Running on: kubernetes-bootcamp-6847766f5-sg4x8 | v=1
+$ kubectl delete -f service.yaml
+service "kubernetes-bootcamp-service" deleted from user-m-anane-ece namespace
+$ kubectl delete -f deployment.yaml
+deployment.apps "kubernetes-bootcamp" deleted from user-m-anane-ece namespace
+$ kubectl get all
+NAME                                       READY   STATUS        RESTARTS   AGE
+pod/kubernetes-bootcamp-5cb764dc58-wtfdw   1/1     Terminating   0          22s
+pod/kubernetes-bootcamp-5cb764dc58-zj4jc   1/1     Terminating   0          19s
+pod/kubernetes-bootcamp-6847766f5-s496x    1/1     Terminating   0          6s
+pod/kubernetes-bootcamp-6847766f5-sg4x8    1/1     Terminating   0          14s
+pod/kubernetes-bootcamp-6847766f5-t8x2m    1/1     Terminating   0          6s
+pod/kubernetes-bootcamp-b977ff9c6-j4d6r    1/1     Terminating   0          79s
+pod/kubernetes-bootcamp-b977ff9c6-tgtd8    1/1     Terminating   0          85s
+pod/vscode-pyspark-123865-0                1/1     Running       0          17m
+
+NAME                            TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)             AGE
+service/vscode-pyspark-123865   ClusterIP   None         <none>        8080/TCP,4040/TCP   17m
+
+NAME                                     READY   AGE
+statefulset.apps/vscode-pyspark-123865   1/1     17m
+$ true
+EXIT_CODE=0

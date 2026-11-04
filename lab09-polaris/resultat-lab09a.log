@@ -1,0 +1,170 @@
+===== lab09a - Wed Nov  4 01:06:42 PM UTC 2026 =====
+$ kubectl get pod vscode-pyspark-123865-0 -o 'jsonpath={.spec.containers[0].resources}'
+{"limits":{"cpu":"2","memory":"3000Mi"},"requests":{"cpu":"50m","memory":"200Mi"}}$ echo
+
+$ kubectl describe quota
+$ tail -7
+--------          ----    ----
+count/pods        1       8
+limits.cpu        2       4
+limits.memory     3000Mi  4Gi
+requests.cpu      50m     1
+requests.memory   200Mi   1Gi
+requests.storage  10Gi    20Gi
+$ mkdir -p /home/onyxia/work/polaris-lab
+$ cd /home/onyxia/work/polaris-lab
+$ base64 -d /home/onyxia/work/labkit/polaris_files.b64
+$ gunzip
+$ wc -l /home/onyxia/work/labkit/polaris_files.sh
+608 /home/onyxia/work/labkit/polaris_files.sh
+$ bash /home/onyxia/work/labkit/polaris_files.sh
+$ find polaris -type f
+$ sort
+polaris/deployment/Chart.yaml
+polaris/deployment/templates/bootstrap-job.yaml
+polaris/deployment/templates/polaris-db-secret.yaml
+polaris/deployment/values.yaml
+$ cd polaris
+$ export POLARIS_URI=http://polaris:8181
+$ POLARIS_URI=http://polaris:8181
+$ export POLARIS_MGMT_URI=http://polaris-mgmt:8182
+$ POLARIS_MGMT_URI=http://polaris-mgmt:8182
+$ export POLARIS_CATALOG=user-m-anane-ece
+$ POLARIS_CATALOG=user-m-anane-ece
+$ export API=http://polaris:8181/api/management/v1
+$ API=http://polaris:8181/api/management/v1
+$ echo user-m-anane-ece
+user-m-anane-ece
+$ aws s3 --profile default ls s3://user-m-anane-ece/bronze/
+2026-11-04 12:47:31     331568 orders.csv
+2026-11-04 12:47:25       7351 users.csv
+$ kubectl apply -f -
+$ kubectl create configmap polaris-config --from-literal=POLARIS_CATALOG=user-m-anane-ece --from-literal=POLARIS_URI=http://polaris:8181 --from-literal=POLARIS_MGMT_URI=http://polaris-mgmt:8182 --from-literal=POLARIS_REALM=POLARIS --from-literal=POLARIS_CLIENT_ID=root --from-literal=POLARIS_BASE_LOCATION=s3://user-m-anane-ece/warehouse/ --from-literal=S3_ENDPOINT=https://s3.seaweedfs.adm.adaltas.cloud/ --dry-run=client -o yaml
+configmap/polaris-config created
+$ kubectl create secret generic polaris-credential --from-literal=POLARIS_ROOT_SECRET=s3cr3t --dry-run=client -o yaml
+$ kubectl apply -f -
+secret/polaris-credential created
+$ set +x
+secret/polaris-s3 created
+$ helm repo add polaris https://downloads.apache.org/polaris/helm-chart
+"polaris" has been added to your repositories
+$ helm repo update
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "polaris" chart repository
+Update Complete. ⎈Happy Helming!⎈
+$ helm dependency update ./deployment
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "polaris" chart repository
+Update Complete. ⎈Happy Helming!⎈
+Saving 2 charts
+Downloading polaris from repo https://downloads.apache.org/polaris/helm-chart
+Downloading postgresql from repo oci://registry-1.docker.io/bitnamicharts
+Pulled: registry-1.docker.io/bitnamicharts/postgresql:18.12.15
+Digest: sha256:8ab742fa91169b2c317a0ffa061d279d4964a45850408a319c764b3798242ba2
+Deleting outdated charts
+$ helm upgrade --install polaris ./deployment --wait --timeout 10m
+Release "polaris" does not exist. Installing it now.
+NAME: polaris
+LAST DEPLOYED: Wed Nov  4 13:06:48 2026
+NAMESPACE: user-m-anane-ece
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+$ kubectl get pods
+NAME                      READY   STATUS      RESTARTS   AGE
+polaris-bootstrap-7nk6q   0/1     Completed   0          41s
+polaris-cd7bf79b-bgbvr    1/1     Running     0          3m21s
+polaris-postgresql-0      1/1     Running     0          3m21s
+vscode-pyspark-123865-0   1/1     Running     0          11m
+$ helm list
+NAME                 	NAMESPACE       	REVISION	UPDATED                                	STATUS  	CHART               	APP VERSION
+polaris              	user-m-anane-ece	1       	2026-11-04 13:06:48.067231647 +0000 UTC	deployed	polaris-1.8.0       	           
+vscode-pyspark-123865	user-m-anane-ece	1       	2026-11-04 12:17:06.836188546 +0000 UTC	deployed	vscode-pyspark-3.2.7	           
+$$ seq 1 30
+$ for i in $(seq 1 30)
+$ curl -s http://polaris-mgmt:8182/q/health
+$ grep -q '"UP"'
+$ break
+$ curl -s http://polaris-mgmt:8182/q/health
+$ head -5
+{
+    "status": "UP",
+    "checks": [
+        {
+            "name": "MongoDB connection health check",
+$ kubectl logs job/polaris-bootstrap
+$ grep -v '"credentials"'
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/APKINDEX.tar.gz
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/community/x86_64/APKINDEX.tar.gz
+(1/11) Installing brotli-libs (1.1.1-r0)
+(2/11) Installing c-ares (1.34.9-r0)
+(3/11) Installing libunistring (1.2-r0)
+(4/11) Installing libidn2 (2.3.7-r0)
+(5/11) Installing nghttp2-libs (1.69.0-r0)
+(6/11) Installing libpsl (0.21.5-r3)
+(7/11) Installing zstd-libs (1.5.6-r2)
+(8/11) Installing libcurl (8.14.1-r3)
+(9/11) Installing curl (8.14.1-r3)
+(10/11) Installing oniguruma (6.9.9-r0)
+(11/11) Installing jq (1.7.1-r0)
+Executing busybox-1.37.0-r14.trigger
+OK: 13 MiB in 26 packages
+Waiting for Polaris...
+Polaris is ready.
+Realm: POLARIS
+Catalog: user-m-anane-ece
+Obtaining administrative access token...
+Creating principal 'dev'...
+Principal 'dev' created.
+Creating principal 'analyst'...
+Principal 'analyst' created.
+Creating principal role 'data_engineer'...
+Principal role 'data_engineer' created.
+Creating principal role 'data_analyst'...
+Principal role 'data_analyst' created.
+Creating catalog 'user-m-anane-ece'...
+Catalog 'user-m-anane-ece' created.
+Creating catalog role 'catalog_contributor'...
+Catalog role 'catalog_contributor' created.
+Creating catalog role 'catalog_reader'...
+Catalog role 'catalog_reader' created.
+Granting CATALOG_MANAGE_ACCESS to 'catalog_contributor'...
+Granted CATALOG_MANAGE_ACCESS to 'catalog_contributor'.
+Granting CATALOG_MANAGE_METADATA to 'catalog_contributor'...
+Granted CATALOG_MANAGE_METADATA to 'catalog_contributor'.
+Granting CATALOG_MANAGE_CONTENT to 'catalog_contributor'...
+Granted CATALOG_MANAGE_CONTENT to 'catalog_contributor'.
+Granting TABLE_READ_DATA to 'catalog_reader'...
+Granted TABLE_READ_DATA to 'catalog_reader'.
+Granting TABLE_READ_PROPERTIES to 'catalog_reader'...
+Granted TABLE_READ_PROPERTIES to 'catalog_reader'.
+Granting CATALOG_READ_PROPERTIES to 'catalog_reader'...
+Granted CATALOG_READ_PROPERTIES to 'catalog_reader'.
+Assigning 'data_engineer' to 'dev'...
+Assigned 'data_engineer' to 'dev'.
+Assigning 'data_analyst' to 'analyst'...
+Assigned 'data_analyst' to 'analyst'.
+Assigning 'catalog_contributor' to 'data_engineer'...
+Assigned 'catalog_contributor' to 'data_engineer'.
+Assigning 'catalog_reader' to 'data_analyst'...
+Assigned 'catalog_reader' to 'data_analyst'.
+========================================
+Polaris RBAC bootstrap completed.
+Catalog: user-m-anane-ece
+dev      -> data_engineer -> catalog_contributor
+analyst  -> data_analyst -> catalog_reader
+========================================
+$ set +x
+POLARIS_DEV_CREDENTIAL=32f7...(masque)
+POLARIS_ANALYST_CREDENTIAL=7482...(masque)
+TOKEN root obtenu : 760 caracteres
+$ curl -s "$API/catalogs" -H "Authorization: Bearer $TOKEN" | jq
+[{"name":"user-m-anane-ece","type":"INTERNAL","base":"s3://user-m-anane-ece/warehouse/"}]
+$ curl -s "$API/principals" -H "Authorization: Bearer $TOKEN" | jq
+[{"name":"dev","type":null,"base":null},{"name":"root","type":null,"base":null},{"name":"analyst","type":null,"base":null}]
+$ curl -s "$API/principal-roles" -H "Authorization: Bearer $TOKEN" | jq
+[{"name":"data_analyst","type":null,"base":null},{"name":"data_engineer","type":null,"base":null},{"name":"service_admin","type":null,"base":null}]
+$ curl -s "$API/catalogs/user-m-anane-ece/catalog-roles" -H "Authorization: Bearer $TOKEN" | jq
+[{"name":"catalog_reader","type":null,"base":null},{"name":"catalog_contributor","type":null,"base":null},{"name":"catalog_admin","type":null,"base":null}]
+$ true
+EXIT_CODE=0

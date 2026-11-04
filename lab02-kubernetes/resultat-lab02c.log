@@ -1,0 +1,349 @@
+===== lab02c - Wed Nov  4 12:38:18 PM UTC 2026 =====
+$ kubectl create namespace lab-job-cronjob
+Error from server (Forbidden): namespaces is forbidden: User "system:serviceaccount:user-m-anane-ece:vscode-pyspark-123865" cannot create resource "namespaces" in API group "" at the cluster scope
+$ NS=user-m-anane-ece
+$ mkdir -p /home/onyxia/work/lab-job-cronjob
+$ cd /home/onyxia/work/lab-job-cronjob
+$ cat
+$ kubectl -n user-m-anane-ece apply -f job-simple.yaml
+job.batch/data-import-job created
+$ kubectl -n user-m-anane-ece get job
+NAME              STATUS    COMPLETIONS   DURATION   AGE
+data-import-job   Running   0/1           0s         0s
+$ kubectl -n user-m-anane-ece wait --for=condition=complete job/data-import-job --timeout=120s
+job.batch/data-import-job condition met
+$ kubectl -n user-m-anane-ece get job
+NAME              STATUS     COMPLETIONS   DURATION   AGE
+data-import-job   Complete   1/1           10s        10s
+$ kubectl logs -n user-m-anane-ece -l job-name=data-import-job
+Starting data import...
+Processing 1000 records...
+Import completed!
+$ cat
+$ kubectl -n user-m-anane-ece apply -f job-with-retry.yaml
+job.batch/data-transform-job created
+$ timeout 45 kubectl -n user-m-anane-ece get job data-transform-job -w
+NAME                 STATUS    COMPLETIONS   DURATION   AGE
+data-transform-job   Running   0/1           0s         0s
+data-transform-job   Running   0/1           3s         3s
+data-transform-job   Running   0/1           4s         4s
+data-transform-job   SuccessCriteriaMet   0/1           7s         7s
+data-transform-job   Complete             1/1           7s         7s
+$ kubectl -n user-m-anane-ece get pods -l job-name=data-transform-job
+NAME                       READY   STATUS      RESTARTS   AGE
+data-transform-job-5rgdb   0/1     Completed   0          45s
+$ kubectl -n user-m-anane-ece logs -l job-name=data-transform-job --prefix
+[pod/data-transform-job-5rgdb/transform] Transformation completed!
+$ cat
+$ kubectl -n user-m-anane-ece apply -f job-parallel.yaml
+job.batch/batch-export-job created
+$ timeout 40 kubectl -n user-m-anane-ece get pods -l job-name=batch-export-job -w
+NAME                     READY   STATUS              RESTARTS   AGE
+batch-export-job-2m5x2   0/1     ContainerCreating   0          0s
+batch-export-job-lh6pf   0/1     ContainerCreating   0          0s
+batch-export-job-qhtt9   0/1     ContainerCreating   0          0s
+batch-export-job-zzzt9   0/1     ContainerCreating   0          0s
+batch-export-job-lh6pf   0/1     ContainerCreating   0          2s
+batch-export-job-2m5x2   0/1     ContainerCreating   0          2s
+batch-export-job-lh6pf   1/1     Running             0          2s
+batch-export-job-2m5x2   1/1     Running             0          2s
+batch-export-job-qhtt9   0/1     ContainerCreating   0          2s
+batch-export-job-zzzt9   0/1     ContainerCreating   0          2s
+batch-export-job-qhtt9   1/1     Running             0          3s
+batch-export-job-zzzt9   1/1     Running             0          3s
+batch-export-job-lh6pf   0/1     Completed           0          9s
+batch-export-job-2m5x2   0/1     Completed           0          9s
+batch-export-job-qhtt9   0/1     Completed           0          10s
+batch-export-job-zzzt9   0/1     Completed           0          10s
+batch-export-job-lh6pf   0/1     Completed           0          10s
+batch-export-job-2m5x2   0/1     Completed           0          11s
+batch-export-job-lh6pf   0/1     Completed           0          11s
+batch-export-job-2m5x2   0/1     Completed           0          11s
+batch-export-job-qhtt9   0/1     Completed           0          12s
+batch-export-job-qhtt9   0/1     Completed           0          12s
+batch-export-job-zzzt9   0/1     Completed           0          12s
+batch-export-job-zzzt9   0/1     Completed           0          13s
+$ kubectl -n user-m-anane-ece wait --for=condition=complete job/batch-export-job --timeout=120s
+job.batch/batch-export-job condition met
+$ kubectl -n user-m-anane-ece get pods -l job-name=batch-export-job -o wide
+NAME                     READY   STATUS      RESTARTS   AGE   IP           NODE         NOMINATED NODE   READINESS GATES
+batch-export-job-2m5x2   0/1     Completed   0          40s   10.0.0.228   compute-03   <none>           <none>
+batch-export-job-lh6pf   0/1     Completed   0          40s   10.0.7.51    compute-02   <none>           <none>
+batch-export-job-qhtt9   0/1     Completed   0          40s   10.0.0.112   compute-03   <none>           <none>
+batch-export-job-zzzt9   0/1     Completed   0          40s   10.0.0.157   compute-03   <none>           <none>
+$ kubectl -n user-m-anane-ece logs -l job-name=batch-export-job --prefix
+[pod/batch-export-job-2m5x2/export] Pod batch-export-job-2m5x2: Exporting shard...
+[pod/batch-export-job-2m5x2/export] Pod batch-export-job-2m5x2: Export completed!
+[pod/batch-export-job-lh6pf/export] Pod batch-export-job-lh6pf: Exporting shard...
+[pod/batch-export-job-lh6pf/export] Pod batch-export-job-lh6pf: Export completed!
+[pod/batch-export-job-qhtt9/export] Pod batch-export-job-qhtt9: Exporting shard...
+[pod/batch-export-job-qhtt9/export] Pod batch-export-job-qhtt9: Export completed!
+[pod/batch-export-job-zzzt9/export] Pod batch-export-job-zzzt9: Exporting shard...
+[pod/batch-export-job-zzzt9/export] Pod batch-export-job-zzzt9: Export completed!
+$ cat
+$ kubectl -n user-m-anane-ece apply -f cronjob-pipeline.yaml
+cronjob.batch/bronze-to-silver-pipeline created
+$ kubectl -n user-m-anane-ece get cronjob
+NAME                        SCHEDULE      TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+bronze-to-silver-pipeline   */2 * * * *   <none>     False     0        <none>          0s
+$ timeout 150 kubectl -n user-m-anane-ece get jobs -w
+NAME                 STATUS     COMPLETIONS   DURATION   AGE
+batch-export-job     Complete   4/4           13s        41s
+data-import-job      Complete   1/1           10s        97s
+data-transform-job   Complete   1/1           7s         87s
+bronze-to-silver-pipeline-29896600   Running    0/1                      0s
+bronze-to-silver-pipeline-29896600   Running    0/1           0s         0s
+bronze-to-silver-pipeline-29896600   Running    0/1           2s         2s
+bronze-to-silver-pipeline-29896600   Running    0/1           7s         7s
+bronze-to-silver-pipeline-29896600   SuccessCriteriaMet   0/1           8s         8s
+bronze-to-silver-pipeline-29896600   Complete             1/1           8s         8s
+bronze-to-silver-pipeline-29896602   Running              0/1                      0s
+bronze-to-silver-pipeline-29896602   Running              0/1           0s         0s
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep bronze-to-silver
+$$ head -1
+$$ cut -d/ -f2
+$ JOB=bronze-to-silver-pipeline-29896600
+$ echo JOB=bronze-to-silver-pipeline-29896600
+JOB=bronze-to-silver-pipeline-29896600
+$ kubectl -n user-m-anane-ece wait --for=condition=complete job/bronze-to-silver-pipeline-29896600 --timeout=60s
+job.batch/bronze-to-silver-pipeline-29896600 condition met
+$ kubectl -n user-m-anane-ece logs -l job-name=bronze-to-silver-pipeline-29896600
+[2026-11-04 12:40:04.071425] Bronze->Silver ETL started...
+[2026-11-04 12:40:06.072914] Completed! 500 records processed
+$ cat
+$ kubectl -n user-m-anane-ece apply -f cronjob-backup.yaml
+cronjob.batch/daily-backup created
+$ kubectl -n user-m-anane-ece get jobs
+NAME                                 STATUS     COMPLETIONS   DURATION   AGE
+batch-export-job                     Complete   4/4           13s        3m12s
+bronze-to-silver-pipeline-29896600   Complete   1/1           8s         2m26s
+bronze-to-silver-pipeline-29896602   Running    0/1           26s        26s
+data-import-job                      Complete   1/1           10s        4m8s
+data-transform-job                   Complete   1/1           7s         3m58s
+$ kubectl -n user-m-anane-ece describe job data-import-job
+Name:             data-import-job
+Namespace:        user-m-anane-ece
+Selector:         batch.kubernetes.io/controller-uid=c0a02f09-e709-4740-9185-328f8f3b9d34
+Labels:           batch.kubernetes.io/controller-uid=c0a02f09-e709-4740-9185-328f8f3b9d34
+                  batch.kubernetes.io/job-name=data-import-job
+                  controller-uid=c0a02f09-e709-4740-9185-328f8f3b9d34
+                  job-name=data-import-job
+Annotations:      <none>
+Parallelism:      1
+Completions:      1
+Completion Mode:  NonIndexed
+Suspend:          false
+Backoff Limit:    6
+Start Time:       Wed, 04 Nov 2026 12:38:18 +0000
+Completed At:     Wed, 04 Nov 2026 12:38:28 +0000
+Duration:         10s
+Pods Statuses:    0 Active (0 Ready) / 1 Succeeded / 0 Failed
+Pod Template:
+  Labels:  batch.kubernetes.io/controller-uid=c0a02f09-e709-4740-9185-328f8f3b9d34
+           batch.kubernetes.io/job-name=data-import-job
+           controller-uid=c0a02f09-e709-4740-9185-328f8f3b9d34
+           job-name=data-import-job
+  Containers:
+   import:
+    Image:      python:3.9
+    Port:       <none>
+    Host Port:  <none>
+    Command:
+      python
+      -c
+    Args:
+      import time
+      print("Starting data import...")
+      time.sleep(3)
+      print("Processing 1000 records...")
+      print("Import completed!")
+      
+    Limits:
+      cpu:     200m
+      memory:  128Mi
+    Requests:
+      cpu:         20m
+      memory:      32Mi
+    Environment:   <none>
+    Mounts:        <none>
+  Volumes:         <none>
+  Node-Selectors:  <none>
+  Tolerations:     <none>
+Events:
+  Type    Reason            Age    From            Message
+  ----    ------            ----   ----            -------
+  Normal  SuccessfulCreate  4m8s   job-controller  Created pod: data-import-job-6sfqj
+  Normal  Completed         3m58s  job-controller  Job completed
+$ kubectl -n user-m-anane-ece logs -l job-name=data-import-job
+Starting data import...
+Processing 1000 records...
+Import completed!
+$ kubectl -n user-m-anane-ece patch cronjob bronze-to-silver-pipeline -p '{"spec":{"suspend":true}}'
+cronjob.batch/bronze-to-silver-pipeline patched
+$ kubectl -n user-m-anane-ece get cronjob bronze-to-silver-pipeline
+NAME                        SCHEDULE      TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+bronze-to-silver-pipeline   */2 * * * *   <none>     True      1        26s             2m31s
+$ kubectl -n user-m-anane-ece patch cronjob bronze-to-silver-pipeline -p '{"spec":{"suspend":false}}'
+cronjob.batch/bronze-to-silver-pipeline patched
+$ kubectl -n user-m-anane-ece get cronjob bronze-to-silver-pipeline
+NAME                        SCHEDULE      TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+bronze-to-silver-pipeline   */2 * * * *   <none>     False     1        27s             2m32s
+$ cat
+$ kubectl -n user-m-anane-ece apply -f cronjob-etl.yaml
+cronjob.batch/etl-bronze-to-silver created
+$ kubectl get cronjob -n user-m-anane-ece
+NAME                        SCHEDULE      TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+bronze-to-silver-pipeline   */2 * * * *   <none>     False     1        27s             2m32s
+daily-backup                0 2 * * *     <none>     False     0        <none>          1s
+etl-bronze-to-silver        */5 * * * *   <none>     False     0        <none>          0s
+$$ seq 1 40
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=
+$ '[' -n '' ']'
+$ sleep 10
+$ for i in $(seq 1 40)
+$$ kubectl -n user-m-anane-ece get jobs -o name
+$$ grep etl-bronze
+$$ head -1
+$ J=job.batch/etl-bronze-to-silver-29896605
+$ '[' -n job.batch/etl-bronze-to-silver-29896605 ']'
+$ break
+$ echo 'ETL JOB=job.batch/etl-bronze-to-silver-29896605'
+ETL JOB=job.batch/etl-bronze-to-silver-29896605
+$ kubectl -n user-m-anane-ece wait --for=condition=complete job.batch/etl-bronze-to-silver-29896605 --timeout=90s
+job.batch/etl-bronze-to-silver-29896605 condition met
+$ kubectl -n user-m-anane-ece logs job.batch/etl-bronze-to-silver-29896605
+[2026-11-04T12:45:34.717273] ETL: Bronze->Silver
+[2026-11-04T12:45:34.717273] Batch size: 1000
+[2026-11-04T12:45:34.717273] Reading, validating, deduplicating...
+[2026-11-04T12:45:34.717273] Writing to Silver layer...
+[2026-11-04T12:45:34.717273] Completed!
+$ kubectl get jobs -n user-m-anane-ece
+NAME                                 STATUS     COMPLETIONS   DURATION   AGE
+batch-export-job                     Complete   4/4           13s        6m24s
+bronze-to-silver-pipeline-29896600   Complete   1/1           8s         5m38s
+bronze-to-silver-pipeline-29896602   Running    0/1           3m38s      3m38s
+data-import-job                      Complete   1/1           10s        7m20s
+data-transform-job                   Complete   1/1           7s         7m10s
+etl-bronze-to-silver-29896605        Complete   1/1           37s        38s
+upload-bronze                        Running    0/1           3m8s       3m8s
+$ kubectl -n user-m-anane-ece delete job --all
+job.batch "batch-export-job" deleted from user-m-anane-ece namespace
+job.batch "bronze-to-silver-pipeline-29896600" deleted from user-m-anane-ece namespace
+job.batch "bronze-to-silver-pipeline-29896602" deleted from user-m-anane-ece namespace
+job.batch "data-import-job" deleted from user-m-anane-ece namespace
+job.batch "data-transform-job" deleted from user-m-anane-ece namespace
+job.batch "etl-bronze-to-silver-29896605" deleted from user-m-anane-ece namespace
+job.batch "upload-bronze" deleted from user-m-anane-ece namespace
+$ kubectl -n user-m-anane-ece delete cronjob --all
+cronjob.batch "bronze-to-silver-pipeline" deleted from user-m-anane-ece namespace
+cronjob.batch "daily-backup" deleted from user-m-anane-ece namespace
+cronjob.batch "etl-bronze-to-silver" deleted from user-m-anane-ece namespace
+$ kubectl -n user-m-anane-ece get jobs,cronjobs
+No resources found in user-m-anane-ece namespace.
+$ cd ..
+$ rm -r lab-job-cronjob
+$ true
+EXIT_CODE=0

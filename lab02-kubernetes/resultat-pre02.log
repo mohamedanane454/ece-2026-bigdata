@@ -1,0 +1,66 @@
+===== pre02 - Wed Nov  4 12:31:44 PM UTC 2026 =====
+$ kubectl auth can-i create namespaces
+Warning: resource 'namespaces' is not namespace scoped
+
+no
+$ kubectl auth can-i create deployments
+yes
+$ kubectl auth can-i create services
+yes
+$ kubectl auth can-i create cronjobs
+yes
+$ kubectl auth can-i get nodes
+Warning: resource 'nodes' is not namespace scoped
+
+no
+$ kubectl describe quota
+Name:             onyxia-quota
+Namespace:        user-m-anane-ece
+Resource          Used    Hard
+--------          ----    ----
+count/pods        1       8
+limits.cpu        2       4
+limits.memory     2000Mi  4Gi
+requests.cpu      200m    1
+requests.memory   400Mi   1Gi
+requests.storage  10Gi    20Gi
+$ kubectl describe limitrange
+No resources found in user-m-anane-ece namespace.
+$ kubectl get nodes
+$ head -5
+Error from server (Forbidden): nodes is forbidden: User "system:serviceaccount:user-m-anane-ece:vscode-pyspark-123865" cannot list resource "nodes" in API group "" at the cluster scope
+$ kubectl top pods
+$ head -5
+NAME                      CPU(cores)   MEMORY(bytes)   
+vscode-pyspark-123865-0   104m         643Mi           
+$ kubectl get sts -o wide
+NAME                    READY   AGE   CONTAINERS       IMAGES
+vscode-pyspark-123865   1/1     14m   vscode-pyspark   inseefrlab/onyxia-vscode-pyspark:py3.13.15-spark4.1.1
+$ kubectl get sts -o 'jsonpath={.items[0].spec.template.spec.containers[0].resources}'
+{"limits":{"cpu":"2","memory":"2000Mi"},"requests":{"cpu":"200m","memory":"400Mi"}}$ echo
+
+$ which jq helm uv duckdb pyspark spark-submit
+/usr/bin/jq
+/usr/local/bin/helm
+/opt/python/bin/uv
+/usr/local/bin/duckdb
+/usr/local/lib/spark/bin/pyspark
+/usr/local/lib/spark/bin/spark-submit
+$ python3 --version
+Python 3.13.15
+$ java -version
+$ head -1
+openjdk version "21.0.12" 2026-07-21
+$ echo SPARK_HOME=/usr/local/lib/spark
+SPARK_HOME=/usr/local/lib/spark
+$ ls /usr/local/lib/spark/jars
+$ grep -iE 'hadoop-aws|spark-core|iceberg'
+hadoop-aws-3.4.2.jar
+spark-core_2.13-4.1.1.jar
+$ nproc
+16
+$ free -m
+               total        used        free      shared  buff/cache   available
+Mem:          503603       28901      437956         198       40984      474702
+Swap:              0           0           0
+EXIT_CODE=0

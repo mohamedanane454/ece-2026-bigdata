@@ -1,0 +1,206 @@
+===== lab07fix - Wed Nov  4 01:08:50 PM UTC 2026 =====
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ aws s3api --profile default list-multipart-uploads --bucket user-m-anane-ece --prefix silver/
+$ jq -c '.Uploads[]? | {Key, UploadId, Initiated}'
+{"Key":"silver/spark/users.parquet/part-00000-c87891ea-b4b0-48dd-8021-03225575d40a-c000.snappy.parquet","UploadId":"caede2803a846f3b51e96dc4fabb1543400cbdb7_9682d02977394ebbb4eed84cbf6b6918","Initiated":null}
+$ aws s3api --profile default list-multipart-uploads --bucket user-m-anane-ece --prefix silver/
+$ jq -r '.Uploads[]? | [.Key, .UploadId] | @tsv'
+$$ printf '\t'
+$ IFS='	'
+$ read -r key id
+$ aws s3api --profile default abort-multipart-upload --bucket user-m-anane-ece --key silver/spark/users.parquet/part-00000-c87891ea-b4b0-48dd-8021-03225575d40a-c000.snappy.parquet --upload-id caede2803a846f3b51e96dc4fabb1543400cbdb7_9682d02977394ebbb4eed84cbf6b6918
+$ echo 'aborted silver/spark/users.parquet/part-00000-c87891ea-b4b0-48dd-8021-03225575d40a-c000.snappy.parquet'
+aborted silver/spark/users.parquet/part-00000-c87891ea-b4b0-48dd-8021-03225575d40a-c000.snappy.parquet
+$$ printf '\t'
+$ IFS='	'
+$ read -r key id
+$ aws s3api --profile default list-multipart-uploads --bucket user-m-anane-ece --prefix silver/
+{
+    "RequestCharged": null,
+    "Prefix": "silver/"
+}
+$ spark-submit --master 'local[*]' --driver-memory 1g --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 --conf spark.ui.showConsoleProgress=false /home/onyxia/work/labkit/cells.py /home/onyxia/work/labkit/lab07fix.py
+$ grep --line-buffered -vE '^(Ivy|:: |\s+confs|\s+found|\s+org\.|\s+---|\s+\||downloading|\[SUCCESSFUL|resolving|loading settings|Picked up|WARNING: )'
+The jars for the packages stored in: /home/onyxia/.ivy2.5.2/jars
+org.apache.iceberg#iceberg-spark-runtime-4.1_2.13 added as a dependency
+	:: modules in use:
+	0 artifacts copied, 1 already retrieved (0kB/44ms)
+
+>>> [cellule 0]
+... import os, subprocess, time
+... from pyspark.sql import SparkSession
+... def sh(cmd):
+...     r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+...     print("$ " + cmd + "\n" + r.stdout + r.stderr)
+... 
+... os.environ["LAB_BUCKET_NAME"] = os.environ["KUBERNETES_NAMESPACE"]
+... BUCKET = os.environ["LAB_BUCKET_NAME"]
+... 
+... # Adapt to the Spark and Scala versions of your environment
+... ICEBERG_PACKAGE = "org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0"
+... 
+... spark = (
+...     SparkSession.builder
+...     .appName("lab-silver-pyspark")
+...     .master("local[*]")
+...     # S3 access
+...     .config("spark.hadoop.fs.s3a.endpoint", f"https://{os.environ['AWS_S3_ENDPOINT']}")
+...     .config("spark.hadoop.fs.s3a.access.key", os.environ["AWS_ACCESS_KEY_ID"])
+...     .config("spark.hadoop.fs.s3a.secret.key", os.environ["AWS_SECRET_ACCESS_KEY"])
+...     .config("spark.hadoop.fs.s3a.session.token", os.environ.get("AWS_SESSION_TOKEN", ""))
+...     .config(
+...         "spark.hadoop.fs.s3a.aws.credentials.provider",
+...         "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider",
+...     )
+...     .config("spark.hadoop.fs.s3a.path.style.access", "true")
+...     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+...     # Iceberg
+...     .config("spark.jars.packages", ICEBERG_PACKAGE)
+...     .config(
+...         "spark.sql.extensions",
+...         "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+...     )
+...     .config("spark.sql.catalog.lab", "org.apache.iceberg.spark.SparkCatalog")
+...     .config("spark.sql.catalog.lab.type", "hadoop")
+...     .config("spark.sql.catalog.lab.warehouse", f"s3a://{BUCKET}/warehouse")
+...     .getOrCreate()
+... )
+... 
+... spark.sparkContext.setLogLevel("ERROR")
+... spark
+<pyspark.sql.session.SparkSession object at 0x7367ead91e80>
+
+>>> [cellule 1]
+... users_bronze = spark.read.csv(
+...     f"s3a://{BUCKET}/bronze/users.csv", header=True, inferSchema=True, samplingRatio=0.01, multiLine=True
+... )
+... orders_bronze = spark.read.csv(
+...     f"s3a://{BUCKET}/bronze/orders.csv", header=True, inferSchema=True, samplingRatio=0.01, multiLine=True
+... )
+... 
+... users_bronze.printSchema()
+... users_bronze.show(3, truncate=False)
+root
+
++------------------------------------+--------------+--------------+---+---------------------------------------------+-----------------------+----------+
+|uuid                                |username      |name          |sex|address                                      |mail                   |birthdate |
++------------------------------------+--------------+--------------+---+---------------------------------------------+-----------------------+----------+
+|bdd640fb-0667-4ad1-9c80-317fa3b1799d|garzaanthony  |Charles Garcia|M  |908 Jennifer Squares\nRobinsonshire, KY 01352|helenpeterson@gmail.com|1935-10-26|
+|17be3111-1a2a-43ed-962b-0f79c37459ee|blairamanda   |Ryan Munoz    |M  |Unit 6184 Box 9593\nDPO AP 09617             |stanleykendra@gmail.com|2010-01-21|
+|47294739-614f-43d7-99db-3ad0ddd1dfb2|elizabethmiles|Jacob Wood    |M  |283 Steven Groves\nLake Mark, WI 07832       |lydiatrujillo@yahoo.com|1941-11-24|
++------------------------------------+--------------+--------------+---+---------------------------------------------+-----------------------+----------+
+only showing top 3 rows
+
+>>> [cellule 2]
+... from pyspark.sql import functions as F
+... 
+... users_typed = (
+...     users_bronze
+...     .select(
+...         F.col("uuid").cast("string").alias("user_id"),
+...         F.trim("username").alias("username"),
+...         F.trim("name").alias("name"),
+...         F.upper(F.trim("sex")).alias("sex"),
+...         F.lower(F.trim("mail")).alias("email"),
+...         F.col("birthdate").cast("date").alias("birthdate"),
+...         F.split(F.col("address"), "\n").alias("address_lines"),
+...     )
+...     .withColumn("street", F.element_at("address_lines", 1))
+...     .withColumn("address_line_2", F.element_at("address_lines", 2))
+...     .drop("address_lines")
+... )
+... 
+... stg_users = users_typed.select(
+...     "user_id", "username", "name", "sex", "email", "birthdate", "street",
+...     F.regexp_extract("address_line_2", "^(.+), [A-Z]{2} [0-9]{5}$", 1).alias("city"),
+...     F.regexp_extract("address_line_2", "([A-Z]{2}) ([0-9]{5})$", 1).alias("state"),
+...     F.regexp_extract("address_line_2", "([A-Z]{2}) ([0-9]{5})$", 2).alias("zip_code"),
+... )
+... 
+... stg_users = stg_users.withColumn(
+...     "city", F.when(F.col("city") == "", None).otherwise(F.col("city"))
+... )
+... 
+... stg_users.show(5, truncate=False)
++------------------------------------+--------------+------------------+---+-----------------------+----------+---------------------+--------------+-----+--------+
+|user_id                             |username      |name              |sex|email                  |birthdate |street               |city          |state|zip_code|
++------------------------------------+--------------+------------------+---+-----------------------+----------+---------------------+--------------+-----+--------+
+|bdd640fb-0667-4ad1-9c80-317fa3b1799d|garzaanthony  |Charles Garcia    |M  |helenpeterson@gmail.com|1935-10-26|908 Jennifer Squares |Robinsonshire |KY   |01352   |
+|17be3111-1a2a-43ed-962b-0f79c37459ee|blairamanda   |Ryan Munoz        |M  |stanleykendra@gmail.com|2010-01-21|Unit 6184 Box 9593   |NULL          |AP   |09617   |
+|47294739-614f-43d7-99db-3ad0ddd1dfb2|elizabethmiles|Jacob Wood        |M  |lydiatrujillo@yahoo.com|1941-11-24|283 Steven Groves    |Lake Mark     |WI   |07832   |
+|9132b63e-f162-47e4-a9c3-49e03602f8ac|ithomas       |Jonathan Wilkerson|M  |cruzcaitlin@yahoo.com  |1972-03-21|969 Cox Dam Suite 101|Lake Ernest   |TX   |55834   |
+|f143262f-dc5c-4eed-8da0-365bf89897b9|kayla51       |Ashley Dyer       |F  |georgetracy@gmail.com  |2018-08-13|0482 Monica Hills    |East Nathaniel|GA   |71198   |
++------------------------------------+--------------+------------------+---+-----------------------+----------+---------------------+--------------+-----+--------+
+only showing top 5 rows
+
+>>> [cellule 3]
+... # Reprise : l'ecriture Parquet de stg_users avait echoue (NullPointerException du connecteur S3A sur SeaweedFS)
+... stg_users.write.mode("overwrite").parquet(f"s3a://{BUCKET}/silver/spark/users.parquet")
+... sh(f"aws s3 --profile default ls s3://{BUCKET}/silver/ --recursive")
+... users_silver = spark.read.parquet(f"s3a://{BUCKET}/silver/spark/users.parquet")
+... orders_silver = spark.read.parquet(f"s3a://{BUCKET}/silver/spark/orders.parquet")
+... assert users_silver.count() == users_bronze.count()
+... print("asserts OK", users_silver.count(), orders_silver.count())
+$ aws s3 --profile default ls s3://user-m-anane-ece/silver/ --recursive
+2026-11-04 12:51:58      72532 silver/dbt/orders.parquet
+2026-11-04 12:51:58       7113 silver/dbt/users.parquet
+2026-11-04 13:03:58          0 silver/spark/orders.parquet/
+2026-11-04 13:03:59      11803 silver/spark/orders.parquet/_SUCCESS
+2026-11-04 13:03:59       1978 silver/spark/orders.parquet/part-00000-c44adbc4-b6b9-4c78-899e-b9bc80eeff37-c000.snappy.parquet
+2026-11-04 13:09:27          0 silver/spark/users.parquet/
+2026-11-04 13:09:30      11771 silver/spark/users.parquet/_SUCCESS
+2026-11-04 13:09:30       9581 silver/spark/users.parquet/part-00000-b507ab61-fe88-47e2-b297-dd0c64b132ef-c000.snappy.parquet
+
+asserts OK 50 1
+
+>>> [cellule 4]
+... spark.stop()
+$ duckdb -c '
+  SELECT '\''dbt'\'' AS engine, count(*) AS users
+  FROM '\''s3://user-m-anane-ece/silver/dbt/users.parquet'\''
+  UNION ALL
+  SELECT '\''spark'\'', count(*)
+  FROM '\''s3://user-m-anane-ece/silver/spark/users.parquet/*.parquet'\''
+'
+-- Loading resources from /home/onyxia/.duckdbrc
+┌─────────┬───────┐
+│ engine  │ users │
+│ varchar │ int64 │
+├─────────┼───────┤
+│ dbt     │    50 │
+│ spark   │    50 │
+└─────────┴───────┘
+$ duckdb -c 'DESCRIBE SELECT * FROM '\''s3://user-m-anane-ece/silver/dbt/users.parquet'\'''
+-- Loading resources from /home/onyxia/.duckdbrc
+┌────────────────────────────────────────────────┐
+│ s3://user-m-anane-ece/silver/dbt/users.parquet │
+│                                                │
+│ user_id                                uuid    │
+│ username                               varchar │
+│ name                                   varchar │
+│ sex                                    varchar │
+│ email                                  varchar │
+│ birthdate                              date    │
+│ street                                 varchar │
+│ city                                   varchar │
+│ state                                  varchar │
+│ zip_code                               varchar │
+└────────────────────────────────────────────────┘
+$ duckdb -c 'DESCRIBE SELECT * FROM '\''s3://user-m-anane-ece/silver/spark/users.parquet/*.parquet'\'''
+-- Loading resources from /home/onyxia/.duckdbrc
+┌────────────────────────────────────────────────────────────┐
+│ s3://user-m-anane-ece/silver/spark/users.parquet/*.parquet │
+│                                                            │
+│ user_id                                            varchar │
+│ username                                           varchar │
+│ name                                               varchar │
+│ sex                                                varchar │
+│ email                                              varchar │
+│ birthdate                                          date    │
+│ street                                             varchar │
+│ city                                               varchar │
+│ state                                              varchar │
+│ zip_code                                           varchar │
+└────────────────────────────────────────────────────────────┘
+$ true
+EXIT_CODE=0

@@ -1,0 +1,971 @@
+===== lab05 - Wed Nov  4 12:49:39 PM UTC 2026 =====
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ echo user-m-anane-ece
+user-m-anane-ece
+$ aws s3 --profile default ls s3://user-m-anane-ece/bronze/
+2026-11-04 12:47:31     331568 orders.csv
+2026-11-04 12:47:25       7351 users.csv
+$ uv add dbt-duckdb
+Resolved 62 packages in 723ms
+   Building ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+      Built ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+Downloading babel (9.7MiB)
+Downloading dbt-core (1.1MiB)
+Downloading networkx (2.0MiB)
+Downloading pydantic-core (2.1MiB)
+Downloading rapidfuzz (3.0MiB)
+   Building dbt-core-experimental-parser==2.0.11
+ Downloaded dbt-core
+ Downloaded pydantic-core
+ Downloaded networkx
+ Downloaded rapidfuzz
+ Downloaded babel
+      Built dbt-core-experimental-parser==2.0.11
+Prepared 56 packages in 2.72s
+Uninstalled 1 package in 2ms
+Installed 59 packages in 163ms
+ + agate==1.9.1
+ + annotated-types==0.8.0
+ + attrs==26.1.0
+ + babel==2.18.0
+ + certifi==2026.10.23
+ + charset-normalizer==3.5.2
+ + click==8.5.0
+ + colorama==0.4.6
+ + daff==1.4.2
+ + dbt-adapters==1.24.5
+ + dbt-common==1.39.0
+ + dbt-core==1.12.6
+ + dbt-core-experimental-parser==2.0.11
+ + dbt-duckdb==1.11.1
+ + dbt-extractor==0.6.0
+ + dbt-protos==1.0.615
+ + deepdiff==8.6.2
+ ~ ece-2026-bigdata==0.1.0 (from file:///home/onyxia/work/ece-2026-bigdata)
+ + idna==3.20
+ + importlib-metadata==10.1.0
+ + isodate==0.7.2
+ + jinja2==3.1.6
+ + jsonschema==4.26.0
+ + jsonschema-specifications==2025.9.1
+ + leather==0.4.1
+ + markupsafe==3.0.4
+ + mashumaro==3.17
+ + metricflow==0.213.0
+ + more-itertools==10.8.0
+ + msgpack==1.2.4
+ + networkx==3.7
+ + opentelemetry-api==1.45.2
+ + orderly-set==5.5.0
+ + packaging==26.3
+ + parsedatetime==2.6
+ + pathspec==1.0.4
+ + protobuf==6.33.6
+ + pydantic==2.14.2
+ + pydantic-core==2.50.2
+ + python-dateutil==2.9.0.post0
+ + python-dotenv==1.2.4
+ + python-slugify==9.1.3
+ + pytimeparse==1.1.10
+ + pytz==2026.6
+ + pyyaml==6.0.3
+ + rapidfuzz==3.14.6
+ + referencing==0.37.0
+ + requests==2.34.2
+ + rpds-py==2026.9.1
+ + six==1.17.0
+ + snowplow-tracker==1.1.0
+ + sqlglot==30.29.0
+ + sqlparse==0.6.1
+ + tabulate==0.10.0
+ + text-unidecode==1.3
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.4
+ + urllib3==2.8.0
+ + zipp==4.1.2
+$ uv run dbt --version
+Core:
+  - installed: 1.12.6
+  - latest:    1.12.6 - Up to date!
+
+Plugins:
+  - duckdb: 1.11.1 - Up to date!
+
+
+12:49:51  dbt v2 is available, and is the default for new installations. This is dbt Core v1.
+          New project - install v2: https://docs.getdbt.com/docs/local/install-dbt?utm_source=dbt-cli
+          Existing v1 project - upgrade guide: https://docs.getdbt.com/docs/dbt-versions/dbt-upgrade/upgrading-to-v2?utm_source=dbt-cli
+$ uv run dbt init lab_medallion --skip-profile-setup
+12:49:54  Running with dbt=1.12.6
+12:49:55  Creating dbt configuration folder at /home/onyxia/.dbt
+12:49:55  Your new dbt project "lab_medallion" was created!
+Initialized new project in /home/onyxia/work/ece-2026-bigdata/lab_medallion/lab_medallion
+
+For more information on how to configure the profiles.yml file,
+please consult the dbt documentation here:
+
+  https://docs.getdbt.com/docs/configure-your-profile
+
+One more thing:
+
+Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
+
+  https://community.getdbt.com/
+
+Happy modeling!
+
+$ cd lab_medallion
+$ rm -rf models/example
+$ find . -type f
+$ sort
+./analyses/.gitkeep
+./dbt_project.yml
+./.gitignore
+./macros/.gitkeep
+./README.md
+./seeds/.gitkeep
+./snapshots/.gitkeep
+./tests/.gitkeep
+$ cat
+$ uv run dbt debug
+12:49:58  Running with dbt=1.12.6
+12:49:58  dbt version: 1.12.6
+12:49:58  python version: 3.13.15
+12:49:58  python path: /home/onyxia/work/ece-2026-bigdata/.venv/bin/python3
+12:49:58  os info: Linux-7.0.0-29-generic-x86_64-with-glibc2.39
+12:49:59  Using profiles dir at /home/onyxia/work/ece-2026-bigdata/lab_medallion
+12:49:59  Using profiles.yml file at /home/onyxia/work/ece-2026-bigdata/lab_medallion/profiles.yml
+12:49:59  Using dbt_project.yml file at /home/onyxia/work/ece-2026-bigdata/lab_medallion/dbt_project.yml
+12:49:59  adapter type: duckdb
+12:49:59  adapter version: 1.11.1
+12:49:59  Configuration:
+12:49:59    profiles.yml file [OK found and valid]
+12:49:59    dbt_project.yml file [OK found and valid]
+12:49:59  Required dependencies:
+12:49:59   - git [OK found]
+
+12:49:59  Connection:
+12:49:59    database: lab_medallion
+12:49:59    schema: main
+12:49:59    path: lab_medallion.duckdb
+12:49:59    config_options: None
+12:49:59    extensions: None
+12:49:59    settings: {'TimeZone': 'UTC'}
+12:49:59    external_root: .
+12:49:59    use_credential_provider: None
+12:49:59    attach: None
+12:49:59    filesystems: None
+12:49:59    remote: None
+12:49:59    plugins: None
+12:49:59    disable_transactions: False
+12:49:59  Registered adapter: duckdb=1.11.1
+12:49:59    Connection test: [OK connection ok]
+
+12:49:59  All checks passed!
+$ cat
+$ mkdir -p models/bronze models/silver
+$ cat
+$ cat
+$ uv run dbt show -q --limit 3 --inline 'select uuid, user_uuid, date, quantity, product from {{ source('\''bronze'\'', '\''orders'\'') }}'
+| uuid                 | user_uuid            |                 date | quantity | product |
+| -------------------- | -------------------- | -------------------- | -------- | ------- |
+| 2339ba19-2563-4cc... | bdd640fb-0667-4ad... | 2020-01-01 00:02:... |        4 | drink   |
+| b49e04cc-c243-49e... | bdd640fb-0667-4ad... | 2020-01-01 01:28:... |        5 | bread   |
+| 41843b03-04dd-405... | bdd640fb-0667-4ad... | 2020-01-01 02:12:... |        2 | donut   |
+
+$ uv run dbt show -q --limit 3 --inline 'select address from {{ source('\''bronze'\'', '\''users'\'') }}' --output json
+{
+  "show": [
+    {
+      "address": "908 Jennifer Squares\nRobinsonshire, KY 01352"
+    },
+    {
+      "address": "Unit 6184 Box 9593\nDPO AP 09617"
+    },
+    {
+      "address": "283 Steven Groves\nLake Mark, WI 07832"
+    }
+  ]
+}
+$ cat
+$ cat
+$ uv run dbt run --select silver
+12:50:19  Running with dbt=1.12.6
+12:50:20  Registered adapter: duckdb=1.11.1
+12:50:21  Found 2 models, 2 sources, 511 macros
+12:50:21  
+12:50:21  Concurrency: 4 threads (target='dev')
+12:50:21  
+12:50:21  1 of 2 START sql view model main_silver.stg_orders ............................. [RUN]
+12:50:21  2 of 2 START sql view model main_silver.stg_users .............................. [RUN]
+12:50:22  2 of 2 OK created sql view model main_silver.stg_users ......................... [OK in 0.84s]
+12:50:22  1 of 2 OK created sql view model main_silver.stg_orders ........................ [OK in 0.86s]
+12:50:22  
+12:50:22  Finished running 2 view models in 0 hours 0 minutes and 1.23 seconds (1.23s).
+12:50:22  
+12:50:22  Completed successfully
+12:50:22  
+12:50:22  Done. PASS=2 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=2
+$ cat target/compiled/lab_medallion/models/silver/stg_users.sql
+with source as (
+    select * from read_csv('s3://user-m-anane-ece/bronze/users.csv', strict_mode = false)
+),
+
+typed as (
+    select
+        cast(uuid as uuid) as user_id,
+        trim(username) as username,
+        trim(name) as name,
+        upper(trim(sex)) as sex,
+        lower(trim(mail)) as email,
+        cast(birthdate as date) as birthdate,
+        -- The address spans 2 lines: the street, then the city, the state and the zip code
+        split_part(address, chr(10), 1) as street,
+        split_part(address, chr(10), 2) as address_line_2
+    from source
+)
+
+select
+    user_id,
+    username,
+    name,
+    sex,
+    email,
+    birthdate,
+    street,
+    -- Military addresses, such as "DPO AE 12345", have no comma
+    nullif(regexp_extract(address_line_2, '^(.+), [A-Z]{2} \d{5}$', 1), '') as city,
+    regexp_extract(address_line_2, '([A-Z]{2}) (\d{5})$', 1) as state,
+    regexp_extract(address_line_2, '([A-Z]{2}) (\d{5})$', 2) as zip_code
+from typed$ cat target/run/lab_medallion/models/silver/stg_users.sql
+
+  
+  create view "lab_medallion"."main_silver"."stg_users__dbt_tmp" as (
+    with source as (
+    select * from read_csv('s3://user-m-anane-ece/bronze/users.csv', strict_mode = false)
+),
+
+typed as (
+    select
+        cast(uuid as uuid) as user_id,
+        trim(username) as username,
+        trim(name) as name,
+        upper(trim(sex)) as sex,
+        lower(trim(mail)) as email,
+        cast(birthdate as date) as birthdate,
+        -- The address spans 2 lines: the street, then the city, the state and the zip code
+        split_part(address, chr(10), 1) as street,
+        split_part(address, chr(10), 2) as address_line_2
+    from source
+)
+
+select
+    user_id,
+    username,
+    name,
+    sex,
+    email,
+    birthdate,
+    street,
+    -- Military addresses, such as "DPO AE 12345", have no comma
+    nullif(regexp_extract(address_line_2, '^(.+), [A-Z]{2} \d{5}$', 1), '') as city,
+    regexp_extract(address_line_2, '([A-Z]{2}) (\d{5})$', 1) as state,
+    regexp_extract(address_line_2, '([A-Z]{2}) (\d{5})$', 2) as zip_code
+from typed
+  );
+$ ddbq
+$ uv run python -c '
+import duckdb, sys
+con = duckdb.connect('\''lab_medallion.duckdb'\'', read_only=True)
+for q in sys.stdin.read().split('\'';'\''):
+    if q.strip():
+        print('\''D>'\'', q.strip())
+        r = con.sql(q)
+        if r is not None:
+            r.show(max_width=250)
+'
+Traceback (most recent call last):
+  File "<string>", line 7, in <module>
+    r = con.sql(q)
+  File "/home/onyxia/work/ece-2026-bigdata/.venv/lib/python3.13/site-packages/duckdb/_relation.py", line 4346, in _connection_sql
+    return sql(self, query, alias, params)
+  File "/home/onyxia/work/ece-2026-bigdata/.venv/lib/python3.13/site-packages/duckdb/_relation.py", line 3499, in sql
+    relation = _reading_source(con, text, markers, values, alias, parsed)
+  File "/home/onyxia/work/ece-2026-bigdata/.venv/lib/python3.13/site-packages/duckdb/_relation.py", line 3421, in _reading_source
+    signature = _seam.bind(con, parsed if parsed is not None else text, capture=True, values=values)
+  File "/home/onyxia/work/ece-2026-bigdata/.venv/lib/python3.13/site-packages/duckdb/_seam.py", line 83, in bind
+    names, types, parameters, return_type, deferred, captured, writes = con._bind(
+                                                                        ~~~~~~~~~^
+        sql, capture=True, with_writes=True, values=values
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+_duckdb.BinderException: Binder Error: No function matches the given name and argument types 'octet_length(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	octet_length(blob BLOB) -> BIGINT
+	octet_length(bitstring BIT) -> BIGINT
+
+D> SELECT table_schema, table_name, table_type FROM information_schema.tables ORDER BY ALL
+┌──────────────┬────────────┬────────────┐
+│ table_schema │ table_name │ table_type │
+│   varchar    │  varchar   │  varchar   │
+├──────────────┼────────────┼────────────┤
+│ main_silver  │ stg_orders │ VIEW       │
+│ main_silver  │ stg_users  │ VIEW       │
+└──────────────┴────────────┴────────────┘
+
+D> SELECT username, street, city, state, zip_code FROM main_silver.stg_users LIMIT 3
+┌────────────────┬──────────────────────┬───────────────┬─────────┬──────────┐
+│    username    │        street        │     city      │  state  │ zip_code │
+│    varchar     │       varchar        │    varchar    │ varchar │ varchar  │
+├────────────────┼──────────────────────┼───────────────┼─────────┼──────────┤
+│ garzaanthony   │ 908 Jennifer Squares │ Robinsonshire │ KY      │ 01352    │
+│ blairamanda    │ Unit 6184 Box 9593   │ NULL          │ AP      │ 09617    │
+│ elizabethmiles │ 283 Steven Groves    │ Lake Mark     │ WI      │ 07832    │
+└────────────────┴──────────────────────┴───────────────┴─────────┴──────────┘
+
+D> DESCRIBE main_silver.stg_orders
+┌─────────────┬──────────────────────────┬─────────┬─────────┬─────────┬─────────┐
+│ column_name │       column_type        │  null   │   key   │ default │  extra  │
+│   varchar   │         varchar          │ varchar │ varchar │ varchar │ varchar │
+├─────────────┼──────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ order_id    │ UUID                     │ YES     │ NULL    │ NULL    │ NULL    │
+│ user_id     │ UUID                     │ YES     │ NULL    │ NULL    │ NULL    │
+│ ordered_at  │ TIMESTAMP WITH TIME ZONE │ YES     │ NULL    │ NULL    │ NULL    │
+│ quantity    │ INTEGER                  │ YES     │ NULL    │ NULL    │ NULL    │
+│ product     │ VARCHAR                  │ YES     │ NULL    │ NULL    │ NULL    │
+└─────────────┴──────────────────────────┴─────────┴─────────┴─────────┴─────────┘
+
+D> SELECT octet_length(CAST(user_id AS VARCHAR)) AS varchar_bytes FROM main_silver.stg_users LIMIT 1
+$ printf 'code\n'
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo AL
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo AK
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo AZ
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo AR
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo CA
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo CO
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo CT
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo DE
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo DC
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo FL
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo GA
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo HI
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo ID
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo IL
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo IN
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo IA
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo KS
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo KY
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo LA
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo ME
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo MD
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo MA
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo MI
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo MN
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo MS
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo MO
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo MT
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo NE
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo NV
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo NH
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo NJ
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo NM
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo NY
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo NC
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo ND
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo OH
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo OK
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo OR
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo PA
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo RI
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo SC
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo SD
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo TN
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo TX
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo UT
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo VT
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo VA
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo WA
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo WV
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo WI
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo WY
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo AS
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo FM
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo GU
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo MH
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo MP
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo PW
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo PR
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo VI
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo AA
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo AE
+$ for s in AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY AS FM GU MH MP PW PR VI AA AE AP
+$ echo AP
+$ wc -l seeds/states.csv
+63 seeds/states.csv
+$ uv run dbt seed
+12:50:27  Running with dbt=1.12.6
+12:50:28  Registered adapter: duckdb=1.11.1
+12:50:29  Found 2 models, 1 seed, 2 sources, 511 macros
+12:50:29  
+12:50:29  Concurrency: 4 threads (target='dev')
+12:50:29  
+12:50:29  1 of 1 START seed file main.states ............................................. [RUN]
+12:50:30  1 of 1 OK loaded seed file main.states ......................................... [INSERT 62 in 0.19s]
+12:50:30  
+12:50:30  Finished running 1 seed in 0 hours 0 minutes and 0.63 seconds (0.63s).
+12:50:30  
+12:50:30  Completed successfully
+12:50:30  
+12:50:30  Done. PASS=1 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=1
+$ cat
+$ uv run dbt test --select silver
+12:50:34  Running with dbt=1.12.6
+12:50:34  Registered adapter: duckdb=1.11.1
+12:50:36  Found 2 models, 1 seed, 13 data tests, 2 sources, 511 macros
+12:50:36  
+12:50:36  Concurrency: 4 threads (target='dev')
+12:50:36  
+12:50:37  4 of 13 START test not_null_stg_orders_order_id ................................ [RUN]
+12:50:37  3 of 13 START test accepted_values_stg_users_sex__F__M ......................... [RUN]
+12:50:37  1 of 13 START test accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [RUN]
+12:50:37  2 of 13 START test accepted_values_stg_orders_quantity__False__1__2__3__4__5 ... [RUN]
+12:50:38  3 of 13 PASS accepted_values_stg_users_sex__F__M ............................... [PASS in 0.94s]
+12:50:38  5 of 13 START test not_null_stg_orders_user_id ................................. [RUN]
+12:50:38  4 of 13 PASS not_null_stg_orders_order_id ...................................... [PASS in 1.14s]
+12:50:38  1 of 13 PASS accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [PASS in 1.15s]
+12:50:38  2 of 13 PASS accepted_values_stg_orders_quantity__False__1__2__3__4__5 ......... [PASS in 1.15s]
+12:50:38  6 of 13 START test not_null_stg_users_email .................................... [RUN]
+12:50:38  7 of 13 START test not_null_stg_users_state .................................... [RUN]
+12:50:38  8 of 13 START test not_null_stg_users_user_id .................................. [RUN]
+12:50:38  5 of 13 PASS not_null_stg_orders_user_id ....................................... [PASS in 0.46s]
+12:50:38  9 of 13 START test relationships_stg_orders_user_id__user_id__ref_stg_users_ ... [RUN]
+12:50:38  7 of 13 PASS not_null_stg_users_state .......................................... [PASS in 0.42s]
+12:50:38  6 of 13 PASS not_null_stg_users_email .......................................... [PASS in 0.46s]
+12:50:38  8 of 13 PASS not_null_stg_users_user_id ........................................ [PASS in 0.40s]
+12:50:38  10 of 13 START test relationships_stg_users_state__code__ref_states_ ........... [RUN]
+12:50:38  11 of 13 START test unique_stg_orders_order_id ................................. [RUN]
+12:50:38  12 of 13 START test unique_stg_users_email ..................................... [RUN]
+12:50:39  9 of 13 PASS relationships_stg_orders_user_id__user_id__ref_stg_users_ ......... [PASS in 0.42s]
+12:50:39  13 of 13 START test unique_stg_users_user_id ................................... [RUN]
+12:50:39  10 of 13 PASS relationships_stg_users_state__code__ref_states_ ................. [PASS in 0.35s]
+12:50:39  12 of 13 PASS unique_stg_users_email ........................................... [PASS in 0.35s]
+12:50:39  13 of 13 PASS unique_stg_users_user_id ......................................... [PASS in 0.14s]
+12:50:39  11 of 13 PASS unique_stg_orders_order_id ....................................... [PASS in 0.36s]
+12:50:39  
+12:50:39  Finished running 13 data tests in 0 hours 0 minutes and 2.50 seconds (2.50s).
+12:50:39  
+12:50:39  Completed successfully
+12:50:39  
+12:50:39  Done. PASS=13 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=13
+$ cat
+$ uv run dbt test --select silver
+12:50:43  Running with dbt=1.12.6
+12:50:44  Registered adapter: duckdb=1.11.1
+12:50:45  Found 2 models, 1 seed, 14 data tests, 2 sources, 511 macros
+12:50:45  
+12:50:45  Concurrency: 4 threads (target='dev')
+12:50:45  
+12:50:46  1 of 14 START test accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [RUN]
+12:50:46  3 of 14 START test accepted_values_stg_users_sex__F__M ......................... [RUN]
+12:50:46  2 of 14 START test accepted_values_stg_orders_quantity__False__1__2__3__4__5 ... [RUN]
+12:50:46  4 of 14 START test assert_orders_have_users .................................... [RUN]
+12:50:47  3 of 14 PASS accepted_values_stg_users_sex__F__M ............................... [PASS in 1.16s]
+12:50:47  5 of 14 START test not_null_stg_orders_order_id ................................ [RUN]
+12:50:47  2 of 14 PASS accepted_values_stg_orders_quantity__False__1__2__3__4__5 ......... [PASS in 1.32s]
+12:50:47  4 of 14 PASS assert_orders_have_users .......................................... [PASS in 1.32s]
+12:50:47  1 of 14 PASS accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [PASS in 1.36s]
+12:50:47  6 of 14 START test not_null_stg_orders_user_id ................................. [RUN]
+12:50:47  7 of 14 START test not_null_stg_users_email .................................... [RUN]
+12:50:47  8 of 14 START test not_null_stg_users_state .................................... [RUN]
+12:50:47  5 of 14 PASS not_null_stg_orders_order_id ...................................... [PASS in 0.40s]
+12:50:47  9 of 14 START test not_null_stg_users_user_id .................................. [RUN]
+12:50:47  7 of 14 PASS not_null_stg_users_email .......................................... [PASS in 0.32s]
+12:50:47  10 of 14 START test relationships_stg_orders_user_id__user_id__ref_stg_users_ .. [RUN]
+12:50:47  8 of 14 PASS not_null_stg_users_state .......................................... [PASS in 0.36s]
+12:50:47  11 of 14 START test relationships_stg_users_state__code__ref_states_ ........... [RUN]
+12:50:48  6 of 14 PASS not_null_stg_orders_user_id ....................................... [PASS in 0.46s]
+12:50:48  9 of 14 PASS not_null_stg_users_user_id ........................................ [PASS in 0.29s]
+12:50:48  12 of 14 START test unique_stg_orders_order_id ................................. [RUN]
+12:50:48  13 of 14 START test unique_stg_users_email ..................................... [RUN]
+12:50:48  11 of 14 PASS relationships_stg_users_state__code__ref_states_ ................. [PASS in 0.34s]
+12:50:48  10 of 14 PASS relationships_stg_orders_user_id__user_id__ref_stg_users_ ........ [PASS in 0.46s]
+12:50:48  14 of 14 START test unique_stg_users_user_id ................................... [RUN]
+12:50:48  13 of 14 PASS unique_stg_users_email ........................................... [PASS in 0.28s]
+12:50:48  12 of 14 PASS unique_stg_orders_order_id ....................................... [PASS in 0.35s]
+12:50:48  14 of 14 PASS unique_stg_users_user_id ......................................... [PASS in 0.09s]
+12:50:48  
+12:50:48  Finished running 14 data tests in 0 hours 0 minutes and 2.75 seconds (2.75s).
+12:50:48  
+12:50:48  Completed successfully
+12:50:48  
+12:50:48  Done. PASS=14 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=14
+$ cat target/compiled/lab_medallion/tests/assert_orders_have_users.sql
+select
+    o.order_id,
+    o.user_id
+from "lab_medallion"."main_silver"."stg_orders" o
+left join "lab_medallion"."main_silver"."stg_users" u
+    on o.user_id = u.user_id
+where u.user_id is null$ uv run dbt test --select silver --store-failures
+12:50:52  Running with dbt=1.12.6
+12:50:53  Registered adapter: duckdb=1.11.1
+12:50:54  Found 2 models, 1 seed, 14 data tests, 2 sources, 511 macros
+12:50:54  
+12:50:54  Concurrency: 4 threads (target='dev')
+12:50:54  
+12:50:54  2 of 14 START test accepted_values_stg_orders_quantity__False__1__2__3__4__5 ... [RUN]
+12:50:54  1 of 14 START test accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [RUN]
+12:50:54  3 of 14 START test accepted_values_stg_users_sex__F__M ......................... [RUN]
+12:50:54  4 of 14 START test assert_orders_have_users .................................... [RUN]
+12:50:56  3 of 14 PASS accepted_values_stg_users_sex__F__M ............................... [PASS in 1.37s]
+12:50:56  5 of 14 START test not_null_stg_orders_order_id ................................ [RUN]
+12:50:56  2 of 14 PASS accepted_values_stg_orders_quantity__False__1__2__3__4__5 ......... [PASS in 1.61s]
+12:50:56  6 of 14 START test not_null_stg_orders_user_id ................................. [RUN]
+12:50:56  1 of 14 PASS accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [PASS in 1.64s]
+12:50:56  7 of 14 START test not_null_stg_users_email .................................... [RUN]
+12:50:56  4 of 14 PASS assert_orders_have_users .......................................... [PASS in 1.73s]
+12:50:56  8 of 14 START test not_null_stg_users_state .................................... [RUN]
+12:50:56  5 of 14 PASS not_null_stg_orders_order_id ...................................... [PASS in 0.52s]
+12:50:56  9 of 14 START test not_null_stg_users_user_id .................................. [RUN]
+12:50:56  7 of 14 PASS not_null_stg_users_email .......................................... [PASS in 0.52s]
+12:50:56  10 of 14 START test relationships_stg_orders_user_id__user_id__ref_stg_users_ .. [RUN]
+12:50:56  6 of 14 PASS not_null_stg_orders_user_id ....................................... [PASS in 0.63s]
+12:50:56  8 of 14 PASS not_null_stg_users_state .......................................... [PASS in 0.53s]
+12:50:56  11 of 14 START test relationships_stg_users_state__code__ref_states_ ........... [RUN]
+12:50:57  12 of 14 START test unique_stg_orders_order_id ................................. [RUN]
+12:50:57  9 of 14 PASS not_null_stg_users_user_id ........................................ [PASS in 0.64s]
+12:50:57  13 of 14 START test unique_stg_users_email ..................................... [RUN]
+12:50:57  11 of 14 PASS relationships_stg_users_state__code__ref_states_ ................. [PASS in 0.45s]
+12:50:57  14 of 14 START test unique_stg_users_user_id ................................... [RUN]
+12:50:57  10 of 14 PASS relationships_stg_orders_user_id__user_id__ref_stg_users_ ........ [PASS in 0.67s]
+12:50:57  12 of 14 PASS unique_stg_orders_order_id ....................................... [PASS in 0.59s]
+12:50:57  13 of 14 PASS unique_stg_users_email ........................................... [PASS in 0.43s]
+12:50:57  14 of 14 PASS unique_stg_users_user_id ......................................... [PASS in 0.25s]
+12:50:57  
+12:50:57  Finished running 14 data tests in 0 hours 0 minutes and 3.55 seconds (3.55s).
+12:50:57  
+12:50:57  Completed successfully
+12:50:57  
+12:50:57  Done. PASS=14 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=14
+$ ddbq
+$ uv run python -c '
+import duckdb, sys
+con = duckdb.connect('\''lab_medallion.duckdb'\'', read_only=True)
+for q in sys.stdin.read().split('\'';'\''):
+    if q.strip():
+        print('\''D>'\'', q.strip())
+        r = con.sql(q)
+        if r is not None:
+            r.show(max_width=250)
+'
+D> SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema LIKE '%audit%' ORDER BY ALL
+┌──────────────────────┬─────────────────────────────────────────────────────────────┐
+│     table_schema     │                         table_name                          │
+│       varchar        │                           varchar                           │
+├──────────────────────┼─────────────────────────────────────────────────────────────┤
+│ main_dbt_test__audit │ accepted_values_stg_orders_de259b370dee6c9743e27a137bfd3ddd │
+│ main_dbt_test__audit │ accepted_values_stg_orders_quantity__False__1__2__3__4__5   │
+│ main_dbt_test__audit │ accepted_values_stg_users_sex__F__M                         │
+│ main_dbt_test__audit │ assert_orders_have_users                                    │
+│ main_dbt_test__audit │ not_null_stg_orders_order_id                                │
+│ main_dbt_test__audit │ not_null_stg_orders_user_id                                 │
+│ main_dbt_test__audit │ not_null_stg_users_email                                    │
+│ main_dbt_test__audit │ not_null_stg_users_state                                    │
+│ main_dbt_test__audit │ not_null_stg_users_user_id                                  │
+│ main_dbt_test__audit │ relationships_stg_orders_user_id__user_id__ref_stg_users_   │
+│ main_dbt_test__audit │ relationships_stg_users_state__code__ref_states_            │
+│ main_dbt_test__audit │ unique_stg_orders_order_id                                  │
+│ main_dbt_test__audit │ unique_stg_users_email                                      │
+│ main_dbt_test__audit │ unique_stg_users_user_id                                    │
+└──────────────────────┴─────────────────────────────────────────────────────────────┘
+  14 rows                                                                  2 columns
+
+$ cat
+$ uv run dbt test --select silver
+12:51:02  Running with dbt=1.12.6
+12:51:02  Registered adapter: duckdb=1.11.1
+12:51:04  Found 2 models, 1 seed, 15 data tests, 2 sources, 511 macros
+12:51:04  
+12:51:04  Concurrency: 4 threads (target='dev')
+12:51:04  
+12:51:04  4 of 15 START test assert_orders_after_user_birth .............................. [RUN]
+12:51:04  2 of 15 START test accepted_values_stg_orders_quantity__False__1__2__3__4__5 ... [RUN]
+12:51:04  3 of 15 START test accepted_values_stg_users_sex__F__M ......................... [RUN]
+12:51:04  1 of 15 START test accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [RUN]
+12:51:05  3 of 15 PASS accepted_values_stg_users_sex__F__M ............................... [PASS in 1.35s]
+12:51:05  5 of 15 START test assert_orders_have_users .................................... [RUN]
+12:51:06  2 of 15 PASS accepted_values_stg_orders_quantity__False__1__2__3__4__5 ......... [PASS in 1.58s]
+12:51:06  6 of 15 START test not_null_stg_orders_order_id ................................ [RUN]
+12:51:06  1 of 15 PASS accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [PASS in 1.66s]
+12:51:06  7 of 15 START test not_null_stg_orders_user_id ................................. [RUN]
+12:51:06  4 of 15 FAIL 288 assert_orders_after_user_birth ................................ [FAIL 288 in 1.73s]
+12:51:06  8 of 15 START test not_null_stg_users_email .................................... [RUN]
+12:51:06  5 of 15 PASS assert_orders_have_users .......................................... [PASS in 0.37s]
+12:51:06  9 of 15 START test not_null_stg_users_state .................................... [RUN]
+12:51:06  9 of 15 PASS not_null_stg_users_state .......................................... [PASS in 0.09s]
+12:51:06  10 of 15 START test not_null_stg_users_user_id ................................. [RUN]
+12:51:06  8 of 15 PASS not_null_stg_users_email .......................................... [PASS in 0.27s]
+12:51:06  6 of 15 PASS not_null_stg_orders_order_id ...................................... [PASS in 0.41s]
+12:51:06  11 of 15 START test relationships_stg_orders_user_id__user_id__ref_stg_users_ .. [RUN]
+12:51:06  12 of 15 START test relationships_stg_users_state__code__ref_states_ ........... [RUN]
+12:51:06  7 of 15 PASS not_null_stg_orders_user_id ....................................... [PASS in 0.38s]
+12:51:06  13 of 15 START test unique_stg_orders_order_id ................................. [RUN]
+12:51:07  10 of 15 PASS not_null_stg_users_user_id ....................................... [PASS in 0.52s]
+12:51:07  14 of 15 START test unique_stg_users_email ..................................... [RUN]
+12:51:07  11 of 15 PASS relationships_stg_orders_user_id__user_id__ref_stg_users_ ........ [PASS in 0.49s]
+12:51:07  15 of 15 START test unique_stg_users_user_id ................................... [RUN]
+12:51:07  12 of 15 PASS relationships_stg_users_state__code__ref_states_ ................. [PASS in 0.52s]
+12:51:07  14 of 15 PASS unique_stg_users_email ........................................... [PASS in 0.18s]
+12:51:07  13 of 15 PASS unique_stg_orders_order_id ....................................... [PASS in 0.45s]
+12:51:07  15 of 15 PASS unique_stg_users_user_id ......................................... [PASS in 0.12s]
+12:51:07  
+12:51:07  Finished running 15 data tests in 0 hours 0 minutes and 3.03 seconds (3.03s).
+12:51:07  
+12:51:07  Completed with 1 error, 0 partial successes, and 0 warnings:
+12:51:07  
+12:51:07  [ERROR]: in test assert_orders_after_user_birth (tests/assert_orders_after_user_birth.sql)
+12:51:07    Got 288 results, configured to fail if != 0
+12:51:07  
+12:51:07    compiled code at target/compiled/lab_medallion/tests/assert_orders_after_user_birth.sql
+12:51:07  
+12:51:07  Done. PASS=14 WARN=0 ERROR=1 SKIP=0 NO-OP=0 REUSED=0 TOTAL=15
+$ sed -i '1i {{ config(severity='\''warn'\'') }}\n' tests/assert_orders_after_user_birth.sql
+$ head -3 tests/assert_orders_after_user_birth.sql
+{{ config(severity='warn') }}
+
+-- A user cannot order before being born: the test fails if this query returns rows
+$ uv run dbt test --select silver
+12:51:11  Running with dbt=1.12.6
+12:51:12  Registered adapter: duckdb=1.11.1
+12:51:13  Found 2 models, 1 seed, 15 data tests, 2 sources, 511 macros
+12:51:13  
+12:51:13  Concurrency: 4 threads (target='dev')
+12:51:13  
+12:51:14  1 of 15 START test accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [RUN]
+12:51:14  3 of 15 START test accepted_values_stg_users_sex__F__M ......................... [RUN]
+12:51:14  2 of 15 START test accepted_values_stg_orders_quantity__False__1__2__3__4__5 ... [RUN]
+12:51:14  4 of 15 START test assert_orders_after_user_birth .............................. [RUN]
+12:51:15  3 of 15 PASS accepted_values_stg_users_sex__F__M ............................... [PASS in 1.27s]
+12:51:15  5 of 15 START test assert_orders_have_users .................................... [RUN]
+12:51:15  1 of 15 PASS accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [PASS in 1.39s]
+12:51:15  2 of 15 PASS accepted_values_stg_orders_quantity__False__1__2__3__4__5 ......... [PASS in 1.39s]
+12:51:15  6 of 15 START test not_null_stg_orders_order_id ................................ [RUN]
+12:51:15  7 of 15 START test not_null_stg_orders_user_id ................................. [RUN]
+12:51:15  4 of 15 WARN 288 assert_orders_after_user_birth ................................ [WARN 288 in 1.44s]
+12:51:15  8 of 15 START test not_null_stg_users_email .................................... [RUN]
+12:51:16  5 of 15 PASS assert_orders_have_users .......................................... [PASS in 0.42s]
+12:51:16  9 of 15 START test not_null_stg_users_state .................................... [RUN]
+12:51:16  8 of 15 PASS not_null_stg_users_email .......................................... [PASS in 0.41s]
+12:51:16  10 of 15 START test not_null_stg_users_user_id ................................. [RUN]
+12:51:16  9 of 15 PASS not_null_stg_users_state .......................................... [PASS in 0.25s]
+12:51:16  11 of 15 START test relationships_stg_orders_user_id__user_id__ref_stg_users_ .. [RUN]
+12:51:16  7 of 15 PASS not_null_stg_orders_user_id ....................................... [PASS in 0.64s]
+12:51:16  6 of 15 PASS not_null_stg_orders_order_id ...................................... [PASS in 0.66s]
+12:51:16  12 of 15 START test relationships_stg_users_state__code__ref_states_ ........... [RUN]
+12:51:16  13 of 15 START test unique_stg_orders_order_id ................................. [RUN]
+12:51:16  10 of 15 PASS not_null_stg_users_user_id ....................................... [PASS in 0.53s]
+12:51:16  14 of 15 START test unique_stg_users_email ..................................... [RUN]
+12:51:16  11 of 15 PASS relationships_stg_orders_user_id__user_id__ref_stg_users_ ........ [PASS in 0.55s]
+12:51:16  15 of 15 START test unique_stg_users_user_id ................................... [RUN]
+12:51:17  12 of 15 PASS relationships_stg_users_state__code__ref_states_ ................. [PASS in 0.48s]
+12:51:17  14 of 15 PASS unique_stg_users_email ........................................... [PASS in 0.21s]
+12:51:17  13 of 15 PASS unique_stg_orders_order_id ....................................... [PASS in 0.52s]
+12:51:17  15 of 15 PASS unique_stg_users_user_id ......................................... [PASS in 0.15s]
+12:51:17  
+12:51:17  Finished running 15 data tests in 0 hours 0 minutes and 3.22 seconds (3.22s).
+12:51:17  
+12:51:17  Completed with 1 warning:
+12:51:17  
+12:51:17  [WARNING]: in test assert_orders_after_user_birth (tests/assert_orders_after_user_birth.sql)
+12:51:17  [WARNING]: Got 288 results, configured to warn if != 0
+12:51:17  
+12:51:17    compiled code at target/compiled/lab_medallion/tests/assert_orders_after_user_birth.sql
+12:51:17  
+12:51:17  Done. PASS=14 WARN=1 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=15
+$ rm -f lab_medallion.duckdb
+$ uv run dbt build --select silver
+12:51:21  Running with dbt=1.12.6
+12:51:21  Registered adapter: duckdb=1.11.1
+12:51:22  Found 2 models, 1 seed, 15 data tests, 2 sources, 511 macros
+12:51:22  
+12:51:22  Concurrency: 4 threads (target='dev')
+12:51:22  
+12:51:23  1 of 17 START sql view model main_silver.stg_orders ............................ [RUN]
+12:51:23  2 of 17 START sql view model main_silver.stg_users ............................. [RUN]
+12:51:24  2 of 17 OK created sql view model main_silver.stg_users ........................ [OK in 0.64s]
+12:51:24  1 of 17 OK created sql view model main_silver.stg_orders ....................... [OK in 0.65s]
+12:51:24  3 of 17 START test accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [RUN]
+12:51:24  6 of 17 START test assert_orders_after_user_birth .............................. [RUN]
+12:51:24  4 of 17 START test accepted_values_stg_orders_quantity__False__1__2__3__4__5 ... [RUN]
+12:51:24  5 of 17 START test accepted_values_stg_users_sex__F__M ......................... [RUN]
+12:51:24  5 of 17 PASS accepted_values_stg_users_sex__F__M ............................... [PASS in 0.82s]
+12:51:24  7 of 17 START test assert_orders_have_users .................................... [RUN]
+12:51:25  3 of 17 PASS accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [PASS in 1.01s]
+12:51:25  8 of 17 START test not_null_stg_orders_order_id ................................ [RUN]
+12:51:25  4 of 17 PASS accepted_values_stg_orders_quantity__False__1__2__3__4__5 ......... [PASS in 1.07s]
+12:51:25  9 of 17 START test not_null_stg_orders_user_id ................................. [RUN]
+12:51:25  6 of 17 WARN 288 assert_orders_after_user_birth ................................ [WARN 288 in 1.17s]
+12:51:25  7 of 17 PASS assert_orders_have_users .......................................... [PASS in 0.41s]
+12:51:25  10 of 17 START test not_null_stg_users_email ................................... [RUN]
+12:51:25  11 of 17 START test not_null_stg_users_state ................................... [RUN]
+12:51:25  8 of 17 PASS not_null_stg_orders_order_id ...................................... [PASS in 0.40s]
+12:51:25  12 of 17 START test not_null_stg_users_user_id ................................. [RUN]
+12:51:25  10 of 17 PASS not_null_stg_users_email ......................................... [PASS in 0.31s]
+12:51:25  11 of 17 PASS not_null_stg_users_state ......................................... [PASS in 0.28s]
+12:51:25  13 of 17 START test relationships_stg_orders_user_id__user_id__ref_stg_users_ .. [RUN]
+12:51:25  9 of 17 PASS not_null_stg_orders_user_id ....................................... [PASS in 0.46s]
+12:51:25  14 of 17 START test relationships_stg_users_state__code__ref_states_ ........... [RUN]
+12:51:25  15 of 17 START test unique_stg_orders_order_id ................................. [RUN]
+12:51:26  12 of 17 PASS not_null_stg_users_user_id ....................................... [PASS in 0.53s]
+12:51:26  16 of 17 START test unique_stg_users_email ..................................... [RUN]
+12:51:26  14 of 17 ERROR relationships_stg_users_state__code__ref_states_ ................ [ERROR in 0.48s]
+12:51:26  17 of 17 START test unique_stg_users_user_id ................................... [RUN]
+12:51:26  16 of 17 PASS unique_stg_users_email ........................................... [PASS in 0.20s]
+12:51:26  13 of 17 PASS relationships_stg_orders_user_id__user_id__ref_stg_users_ ........ [PASS in 0.60s]
+12:51:26  15 of 17 PASS unique_stg_orders_order_id ....................................... [PASS in 0.43s]
+12:51:26  17 of 17 PASS unique_stg_users_user_id ......................................... [PASS in 0.15s]
+12:51:26  
+12:51:26  Finished running 15 data tests, 2 view models in 0 hours 0 minutes and 3.44 seconds (3.44s).
+12:51:26  
+12:51:26  Completed with 1 error, 0 partial successes, and 1 warning:
+12:51:26  
+12:51:26  [ERROR]: in test relationships_stg_users_state__code__ref_states_ (models/silver/silver.yml)
+12:51:26    Runtime Error in test relationships_stg_users_state__code__ref_states_ (models/silver/silver.yml)
+  Catalog Error: Table with name states does not exist!
+  Did you mean "information_schema.tables"?
+12:51:26  
+12:51:26    compiled code at target/compiled/lab_medallion/models/silver/silver.yml/relationships_stg_users_state__code__ref_states_.sql
+12:51:26  
+12:51:26  [WARNING]: in test assert_orders_after_user_birth (tests/assert_orders_after_user_birth.sql)
+12:51:26  [WARNING]: Got 288 results, configured to warn if != 0
+12:51:26  
+12:51:26    compiled code at target/compiled/lab_medallion/tests/assert_orders_after_user_birth.sql
+12:51:26  
+12:51:26  Done. PASS=15 WARN=1 ERROR=1 SKIP=0 NO-OP=0 REUSED=0 TOTAL=17
+$ uv run dbt build
+12:51:30  Running with dbt=1.12.6
+12:51:31  Registered adapter: duckdb=1.11.1
+12:51:32  Found 2 models, 1 seed, 15 data tests, 2 sources, 511 macros
+12:51:32  
+12:51:32  Concurrency: 4 threads (target='dev')
+12:51:32  
+12:51:33  1 of 18 START sql view model main_silver.stg_orders ............................ [RUN]
+12:51:33  2 of 18 START sql view model main_silver.stg_users ............................. [RUN]
+12:51:33  3 of 18 START seed file main.states ............................................ [RUN]
+12:51:33  3 of 18 OK loaded seed file main.states ........................................ [INSERT 62 in 0.80s]
+12:51:34  2 of 18 OK created sql view model main_silver.stg_users ........................ [OK in 0.95s]
+12:51:34  6 of 18 START test not_null_stg_users_state .................................... [RUN]
+12:51:34  5 of 18 START test not_null_stg_users_email .................................... [RUN]
+12:51:34  4 of 18 START test accepted_values_stg_users_sex__F__M ......................... [RUN]
+12:51:34  1 of 18 OK created sql view model main_silver.stg_orders ....................... [OK in 1.22s]
+12:51:34  7 of 18 START test not_null_stg_users_user_id .................................. [RUN]
+12:51:34  6 of 18 PASS not_null_stg_users_state .......................................... [PASS in 0.58s]
+12:51:34  8 of 18 START test relationships_stg_users_state__code__ref_states_ ............ [RUN]
+12:51:34  7 of 18 PASS not_null_stg_users_user_id ........................................ [PASS in 0.50s]
+12:51:34  5 of 18 PASS not_null_stg_users_email .......................................... [PASS in 0.74s]
+12:51:34  4 of 18 PASS accepted_values_stg_users_sex__F__M ............................... [PASS in 0.73s]
+12:51:34  9 of 18 START test unique_stg_users_email ...................................... [RUN]
+12:51:34  10 of 18 START test unique_stg_users_user_id ................................... [RUN]
+12:51:34  11 of 18 START test accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [RUN]
+12:51:35  8 of 18 PASS relationships_stg_users_state__code__ref_states_ .................. [PASS in 0.51s]
+12:51:35  12 of 18 START test accepted_values_stg_orders_quantity__False__1__2__3__4__5 .. [RUN]
+12:51:35  10 of 18 PASS unique_stg_users_user_id ......................................... [PASS in 0.53s]
+12:51:35  13 of 18 START test assert_orders_after_user_birth ............................. [RUN]
+12:51:35  9 of 18 PASS unique_stg_users_email ............................................ [PASS in 0.60s]
+12:51:35  14 of 18 START test assert_orders_have_users ................................... [RUN]
+12:51:35  11 of 18 PASS accepted_values_stg_orders_product__bread__brioche__cookie__croissant__donut__drink  [PASS in 0.79s]
+12:51:35  15 of 18 START test not_null_stg_orders_order_id ............................... [RUN]
+12:51:35  12 of 18 PASS accepted_values_stg_orders_quantity__False__1__2__3__4__5 ........ [PASS in 0.61s]
+12:51:35  16 of 18 START test not_null_stg_orders_user_id ................................ [RUN]
+12:51:35  13 of 18 WARN 288 assert_orders_after_user_birth ............................... [WARN 288 in 0.55s]
+12:51:36  14 of 18 PASS assert_orders_have_users ......................................... [PASS in 0.52s]
+12:51:36  17 of 18 START test relationships_stg_orders_user_id__user_id__ref_stg_users_ .. [RUN]
+12:51:36  18 of 18 START test unique_stg_orders_order_id ................................. [RUN]
+12:51:36  15 of 18 PASS not_null_stg_orders_order_id ..................................... [PASS in 0.49s]
+12:51:36  16 of 18 PASS not_null_stg_orders_user_id ...................................... [PASS in 0.38s]
+12:51:36  18 of 18 PASS unique_stg_orders_order_id ....................................... [PASS in 0.30s]
+12:51:36  17 of 18 PASS relationships_stg_orders_user_id__user_id__ref_stg_users_ ........ [PASS in 0.38s]
+12:51:36  
+12:51:36  Finished running 1 seed, 15 data tests, 2 view models in 0 hours 0 minutes and 3.96 seconds (3.96s).
+12:51:36  
+12:51:36  Completed with 1 warning:
+12:51:36  
+12:51:36  [WARNING]: in test assert_orders_after_user_birth (tests/assert_orders_after_user_birth.sql)
+12:51:36  [WARNING]: Got 288 results, configured to warn if != 0
+12:51:36  
+12:51:36    compiled code at target/compiled/lab_medallion/tests/assert_orders_after_user_birth.sql
+12:51:36  
+12:51:36  Done. PASS=17 WARN=1 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=18
+$ uv run dbt ls -q --resource-type model
+lab_medallion.silver.stg_orders
+lab_medallion.silver.stg_users
+$ uv run dbt ls -q --resource-type source model --select +stg_orders
+lab_medallion.silver.stg_orders
+source:lab_medallion.bronze.orders
+$ uv run dbt docs generate --static
+12:51:52  Running with dbt=1.12.6
+12:51:53  Registered adapter: duckdb=1.11.1
+12:51:54  Found 2 models, 1 seed, 15 data tests, 2 sources, 511 macros
+12:51:54  
+12:51:54  Concurrency: 4 threads (target='dev')
+12:51:54  
+12:51:56  Building catalog
+12:51:56  Catalog written to /home/onyxia/work/ece-2026-bigdata/lab_medallion/target/catalog.json
+$ ls -la target/static_index.html
+-rw-r--r-- 1 onyxia users 2493719 Nov  4 12:51 target/static_index.html
+$ uv run python -
+exports OK
+$ aws s3 --profile default ls s3://user-m-anane-ece/silver/dbt/
+2026-11-04 12:51:58      72532 orders.parquet
+2026-11-04 12:51:58       7113 users.parquet
+$ ddbq
+$ uv run python -c '
+import duckdb, sys
+con = duckdb.connect('\''lab_medallion.duckdb'\'', read_only=True)
+for q in sys.stdin.read().split('\'';'\''):
+    if q.strip():
+        print('\''D>'\'', q.strip())
+        r = con.sql(q)
+        if r is not None:
+            r.show(max_width=250)
+'
+D> SELECT * FROM read_parquet('s3://user-m-anane-ece/silver/dbt/users.parquet') LIMIT 10
+┌──────────────────────────────────────┬────────────────┬────────────────────┬─────────┬──────────────────────────┬────────────┬─────────────────────────────┬────────────────┬─────────┬──────────┐
+│               user_id                │    username    │        name        │   sex   │          email           │ birthdate  │           street            │      city      │  state  │ zip_code │
+│                 uuid                 │    varchar     │      varchar       │ varchar │         varchar          │    date    │           varchar           │    varchar     │ varchar │ varchar  │
+├──────────────────────────────────────┼────────────────┼────────────────────┼─────────┼──────────────────────────┼────────────┼─────────────────────────────┼────────────────┼─────────┼──────────┤
+│ bdd640fb-0667-4ad1-9c80-317fa3b1799d │ garzaanthony   │ Charles Garcia     │ M       │ helenpeterson@gmail.com  │ 1935-10-26 │ 908 Jennifer Squares        │ Robinsonshire  │ KY      │ 01352    │
+│ 17be3111-1a2a-43ed-962b-0f79c37459ee │ blairamanda    │ Ryan Munoz         │ M       │ stanleykendra@gmail.com  │ 2010-01-21 │ Unit 6184 Box 9593          │ NULL           │ AP      │ 09617    │
+│ 47294739-614f-43d7-99db-3ad0ddd1dfb2 │ elizabethmiles │ Jacob Wood         │ M       │ lydiatrujillo@yahoo.com  │ 1941-11-24 │ 283 Steven Groves           │ Lake Mark      │ WI      │ 07832    │
+│ 9132b63e-f162-47e4-a9c3-49e03602f8ac │ ithomas        │ Jonathan Wilkerson │ M       │ cruzcaitlin@yahoo.com    │ 1972-03-21 │ 969 Cox Dam Suite 101       │ Lake Ernest    │ TX      │ 55834    │
+│ f143262f-dc5c-4eed-8da0-365bf89897b9 │ kayla51        │ Ashley Dyer        │ F       │ georgetracy@gmail.com    │ 2018-08-13 │ 0482 Monica Hills           │ East Nathaniel │ GA      │ 71198    │
+│ ce88cb2d-d4e8-4839-bc3e-058be0f3eab0 │ millertodd     │ David Bradley      │ M       │ samuel87@gmail.com       │ 1939-08-07 │ 78248 Brandt Plains         │ Lake Larry     │ TN      │ 85681    │
+│ 969b6662-0562-4059-968c-c69b1064005c │ perezrebecca   │ Adrienne Zimmerman │ F       │ clintonhopkins@yahoo.com │ 1959-12-23 │ 347 Amber Stream            │ Sanchezfort    │ AS      │ 53855    │
+│ 0dde29a6-baa4-471a-9d24-67ac778eedb3 │ wrightjames    │ Monica Mcbride     │ F       │ martinaaron@yahoo.com    │ 1941-08-09 │ 47317 Brent Plains Apt. 132 │ Tuckerborough  │ VI      │ 53066    │
+│ 490617f2-747b-4dba-88fe-3ccdc8b8d9c6 │ smoore         │ Nicholas Logan     │ M       │ larsonemma@gmail.com     │ 1957-09-05 │ 805 Brendan Neck            │ North Susan    │ CO      │ 24857    │
+│ 3f07f814-91d6-4f78-a3e9-de99f10c718b │ sarah35        │ Jennifer Silva     │ F       │ mikemoore@hotmail.com    │ 1992-06-14 │ 47510 Howell Port Apt. 183  │ Davidstad      │ FM      │ 09517    │
+└──────────────────────────────────────┴────────────────┴────────────────────┴─────────┴──────────────────────────┴────────────┴─────────────────────────────┴────────────────┴─────────┴──────────┘
+  10 rows                                                                                                                                                                               10 columns
+
+D> SELECT sex, count(*) AS users FROM read_parquet('s3://user-m-anane-ece/silver/dbt/users.parquet') GROUP BY sex
+┌─────────┬───────┐
+│   sex   │ users │
+│ varchar │ int64 │
+├─────────┼───────┤
+│ M       │    20 │
+│ F       │    30 │
+└─────────┴───────┘
+
+D> SELECT 'parquet' AS src, count(*) AS orders, sum(quantity) AS quantity FROM read_parquet('s3://user-m-anane-ece/silver/dbt/orders.parquet') UNION ALL SELECT 'view', count(*), sum(quantity) FROM main_silver.stg_orders
+┌─────────┬────────┬──────────┐
+│   src   │ orders │ quantity │
+│ varchar │ int64  │  int128  │
+├─────────┼────────┼──────────┤
+│ parquet │   2829 │     8615 │
+│ view    │   2829 │     8615 │
+└─────────┴────────┴──────────┘
+
+D> SELECT count(*) AS rows_only_in_one_side FROM ((SELECT * FROM read_parquet('s3://user-m-anane-ece/silver/dbt/orders.parquet') EXCEPT SELECT * FROM main_silver.stg_orders) UNION ALL (SELECT * FROM main_silver.stg_orders EXCEPT SELECT * FROM read_parquet('s3://user-m-anane-ece/silver/dbt/orders.parquet')))
+┌───────────────────────┐
+│ rows_only_in_one_side │
+│         int64         │
+├───────────────────────┤
+│                     0 │
+└───────────────────────┘
+
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ git add .gitignore pyproject.toml uv.lock lab_medallion
+$ git status --short
+M  .gitignore
+A  lab_medallion/.gitignore
+A  lab_medallion/README.md
+A  lab_medallion/dbt_project.yml
+A  lab_medallion/models/bronze/sources.yml
+A  lab_medallion/models/silver/silver.yml
+A  lab_medallion/models/silver/stg_orders.sql
+A  lab_medallion/models/silver/stg_users.sql
+A  lab_medallion/profiles.yml
+A  lab_medallion/tests/assert_orders_after_user_birth.sql
+A  lab_medallion/tests/assert_orders_have_users.sql
+M  pyproject.toml
+M  uv.lock
+$ git commit -m 'feat: medallion pipeline with dbt'
+[main 2977334] feat: medallion pipeline with dbt
+ 13 files changed, 1362 insertions(+)
+ create mode 100644 lab_medallion/.gitignore
+ create mode 100644 lab_medallion/README.md
+ create mode 100644 lab_medallion/dbt_project.yml
+ create mode 100644 lab_medallion/models/bronze/sources.yml
+ create mode 100644 lab_medallion/models/silver/silver.yml
+ create mode 100644 lab_medallion/models/silver/stg_orders.sql
+ create mode 100644 lab_medallion/models/silver/stg_users.sql
+ create mode 100644 lab_medallion/profiles.yml
+ create mode 100644 lab_medallion/tests/assert_orders_after_user_birth.sql
+ create mode 100644 lab_medallion/tests/assert_orders_have_users.sql
+$ gpush
+$ echo '[git push differe : il sera fait a la fin, avec l'\''authentification GitHub de l'\''utilisateur]'
+[git push differe : il sera fait a la fin, avec l'authentification GitHub de l'utilisateur]
+$ true
+EXIT_CODE=0

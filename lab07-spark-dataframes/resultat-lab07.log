@@ -1,0 +1,690 @@
+===== lab07 - Wed Nov  4 01:02:33 PM UTC 2026 =====
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ git log --oneline
+$ head -3
+f8bfa12 feat(dbt): exercises - normalized username, birthdate validation, zip ranges
+2977334 feat: medallion pipeline with dbt
+4db43b1 feat: orders report with duckdb
+$ echo user-m-anane-ece
+user-m-anane-ece
+$ aws s3 --profile default ls s3://user-m-anane-ece/bronze/
+2026-11-04 12:47:31     331568 orders.csv
+2026-11-04 12:47:25       7351 users.csv
+$ uv run pyspark --version
+   Building ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+      Built ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+Uninstalled 1 package in 2ms
+Installed 1 package in 8ms
+WARNING: Using incubator modules: jdk.incubator.vector
+Welcome to
+      ____              __
+     / __/__  ___ _____/ /__
+    _\ \/ _ \/ _ `/ __/  '_/
+   /___/ .__/\_,_/_/ /_/\_\   version 4.1.1
+      /_/
+                        
+Using Scala version 2.13.17, OpenJDK 64-Bit Server VM, 21.0.12
+Branch HEAD
+Compiled by user runner on 2026-01-10T20:56:35Z
+Revision c0690c763bafabd08e7079d1137fa0a769a05bae
+Url https://github.com/apache/spark.git
+Type --help for more information.
+$ ls /usr/local/lib/spark/jars
+$ grep -i hadoop-aws
+hadoop-aws-3.4.2.jar
+$ spark-submit --master 'local[*]' --driver-memory 1g --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 --conf spark.ui.showConsoleProgress=false /home/onyxia/work/labkit/cells.py /home/onyxia/work/labkit/lab07.py
+$ grep --line-buffered -vE '^(Ivy|:: |\s+confs|\s+found|\s+org\.|\s+---|\s+\||downloading|\[SUCCESSFUL|resolving|loading settings|Picked up|WARNING: )'
+The jars for the packages stored in: /home/onyxia/.ivy2.5.2/jars
+org.apache.iceberg#iceberg-spark-runtime-4.1_2.13 added as a dependency
+	[SUCCESSFUL ] org.apache.iceberg#iceberg-spark-runtime-4.1_2.13;1.11.0!iceberg-spark-runtime-4.1_2.13.jar (1657ms)
+	:: modules in use:
+	1 artifacts copied, 0 already retrieved (46835kB/48ms)
+
+>>> [cellule 0]
+... import os, subprocess, time
+... from pyspark.sql import SparkSession
+... def sh(cmd):
+...     r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+...     print("$ " + cmd + "\n" + r.stdout + r.stderr)
+... 
+... os.environ["LAB_BUCKET_NAME"] = os.environ["KUBERNETES_NAMESPACE"]
+... BUCKET = os.environ["LAB_BUCKET_NAME"]
+... 
+... # Adapt to the Spark and Scala versions of your environment
+... ICEBERG_PACKAGE = "org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0"
+... 
+... spark = (
+...     SparkSession.builder
+...     .appName("lab-silver-pyspark")
+...     .master("local[*]")
+...     # S3 access
+...     .config("spark.hadoop.fs.s3a.endpoint", f"https://{os.environ['AWS_S3_ENDPOINT']}")
+...     .config("spark.hadoop.fs.s3a.access.key", os.environ["AWS_ACCESS_KEY_ID"])
+...     .config("spark.hadoop.fs.s3a.secret.key", os.environ["AWS_SECRET_ACCESS_KEY"])
+...     .config("spark.hadoop.fs.s3a.session.token", os.environ.get("AWS_SESSION_TOKEN", ""))
+...     .config(
+...         "spark.hadoop.fs.s3a.aws.credentials.provider",
+...         "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider",
+...     )
+...     .config("spark.hadoop.fs.s3a.path.style.access", "true")
+...     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+...     # Iceberg
+...     .config("spark.jars.packages", ICEBERG_PACKAGE)
+...     .config(
+...         "spark.sql.extensions",
+...         "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
+...     )
+...     .config("spark.sql.catalog.lab", "org.apache.iceberg.spark.SparkCatalog")
+...     .config("spark.sql.catalog.lab.type", "hadoop")
+...     .config("spark.sql.catalog.lab.warehouse", f"s3a://{BUCKET}/warehouse")
+...     .getOrCreate()
+... )
+... 
+... spark.sparkContext.setLogLevel("ERROR")
+... spark
+<pyspark.sql.session.SparkSession object at 0x7edd565c7b60>
+
+>>> [cellule 1]
+... users_bronze = spark.read.csv(
+...     f"s3a://{BUCKET}/bronze/users.csv", header=True, inferSchema=True, samplingRatio=0.01, multiLine=True
+... )
+... orders_bronze = spark.read.csv(
+...     f"s3a://{BUCKET}/bronze/orders.csv", header=True, inferSchema=True, samplingRatio=0.01, multiLine=True
+... )
+... 
+... users_bronze.printSchema()
+... users_bronze.show(3, truncate=False)
+root
+
++------------------------------------+--------------+--------------+---+---------------------------------------------+-----------------------+----------+
+|uuid                                |username      |name          |sex|address                                      |mail                   |birthdate |
++------------------------------------+--------------+--------------+---+---------------------------------------------+-----------------------+----------+
+|bdd640fb-0667-4ad1-9c80-317fa3b1799d|garzaanthony  |Charles Garcia|M  |908 Jennifer Squares\nRobinsonshire, KY 01352|helenpeterson@gmail.com|1935-10-26|
+|17be3111-1a2a-43ed-962b-0f79c37459ee|blairamanda   |Ryan Munoz    |M  |Unit 6184 Box 9593\nDPO AP 09617             |stanleykendra@gmail.com|2010-01-21|
+|47294739-614f-43d7-99db-3ad0ddd1dfb2|elizabethmiles|Jacob Wood    |M  |283 Steven Groves\nLake Mark, WI 07832       |lydiatrujillo@yahoo.com|1941-11-24|
++------------------------------------+--------------+--------------+---+---------------------------------------------+-----------------------+----------+
+only showing top 3 rows
+
+>>> [cellule 2]
+... users_bronze.select("address").show(3, truncate=False)
++---------------------------------------------+
+|address                                      |
++---------------------------------------------+
+|908 Jennifer Squares\nRobinsonshire, KY 01352|
+|Unit 6184 Box 9593\nDPO AP 09617             |
+|283 Steven Groves\nLake Mark, WI 07832       |
++---------------------------------------------+
+only showing top 3 rows
+
+>>> [cellule 3]
+... from pyspark.sql import functions as F
+... 
+... users_typed = (
+...     users_bronze
+...     .select(
+...         F.col("uuid").cast("string").alias("user_id"),
+...         F.trim("username").alias("username"),
+...         F.trim("name").alias("name"),
+...         F.upper(F.trim("sex")).alias("sex"),
+...         F.lower(F.trim("mail")).alias("email"),
+...         F.col("birthdate").cast("date").alias("birthdate"),
+...         F.split(F.col("address"), "\n").alias("address_lines"),
+...     )
+...     .withColumn("street", F.element_at("address_lines", 1))
+...     .withColumn("address_line_2", F.element_at("address_lines", 2))
+...     .drop("address_lines")
+... )
+... 
+... stg_users = users_typed.select(
+...     "user_id", "username", "name", "sex", "email", "birthdate", "street",
+...     F.regexp_extract("address_line_2", "^(.+), [A-Z]{2} [0-9]{5}$", 1).alias("city"),
+...     F.regexp_extract("address_line_2", "([A-Z]{2}) ([0-9]{5})$", 1).alias("state"),
+...     F.regexp_extract("address_line_2", "([A-Z]{2}) ([0-9]{5})$", 2).alias("zip_code"),
+... )
+... 
+... stg_users = stg_users.withColumn(
+...     "city", F.when(F.col("city") == "", None).otherwise(F.col("city"))
+... )
+... 
+... stg_users.show(5, truncate=False)
++------------------------------------+--------------+------------------+---+-----------------------+----------+---------------------+--------------+-----+--------+
+|user_id                             |username      |name              |sex|email                  |birthdate |street               |city          |state|zip_code|
++------------------------------------+--------------+------------------+---+-----------------------+----------+---------------------+--------------+-----+--------+
+|bdd640fb-0667-4ad1-9c80-317fa3b1799d|garzaanthony  |Charles Garcia    |M  |helenpeterson@gmail.com|1935-10-26|908 Jennifer Squares |Robinsonshire |KY   |01352   |
+|17be3111-1a2a-43ed-962b-0f79c37459ee|blairamanda   |Ryan Munoz        |M  |stanleykendra@gmail.com|2010-01-21|Unit 6184 Box 9593   |NULL          |AP   |09617   |
+|47294739-614f-43d7-99db-3ad0ddd1dfb2|elizabethmiles|Jacob Wood        |M  |lydiatrujillo@yahoo.com|1941-11-24|283 Steven Groves    |Lake Mark     |WI   |07832   |
+|9132b63e-f162-47e4-a9c3-49e03602f8ac|ithomas       |Jonathan Wilkerson|M  |cruzcaitlin@yahoo.com  |1972-03-21|969 Cox Dam Suite 101|Lake Ernest   |TX   |55834   |
+|f143262f-dc5c-4eed-8da0-365bf89897b9|kayla51       |Ashley Dyer       |F  |georgetracy@gmail.com  |2018-08-13|0482 Monica Hills    |East Nathaniel|GA   |71198   |
++------------------------------------+--------------+------------------+---+-----------------------+----------+---------------------+--------------+-----+--------+
+only showing top 5 rows
+
+>>> [cellule 4]
+... from pyspark.sql.window import Window
+... 
+... orders_typed = orders_bronze.select(
+...     F.col("uuid").cast("string").alias("order_id"),
+...     F.col("user_uuid").cast("string").alias("user_id"),
+...     F.col("date").cast("timestamp").alias("ordered_at"),
+...     F.col("quantity").cast("int").alias("quantity"),
+...     F.lower(F.trim("product")).alias("product"),
+... )
+... 
+... print("Original:", orders_typed.count())
+Original: 2829
+
+>>> [cellule 5]
+... duplicates = orders_typed.limit(3)
+... orders_with_duplicates = orders_typed.unionByName(duplicates)
+... 
+... print("With duplicates:", orders_with_duplicates.count())
+... orders_with_duplicates \
+...     .groupBy("order_id") \
+...     .count() \
+...     .filter(F.col("count") > 1) \
+...     .show()
+With duplicates: 2832
++--------------------+-----+
+|            order_id|count|
++--------------------+-----+
+|2339ba19-2563-4cc...|    2|
+|b49e04cc-c243-49e...|    2|
+|41843b03-04dd-405...|    2|
++--------------------+-----+
+
+
+>>> [cellule 6]
+... dedup_window = (
+...     Window
+...     .partitionBy("order_id")
+...     .orderBy(F.col("ordered_at").desc())
+... )
+... 
+... stg_orders = (
+...     orders_with_duplicates
+...     .withColumn("row_number", F.row_number().over(dedup_window))
+...     .filter(F.col("row_number") == 1)
+...     .drop("row_number")
+... )
+... 
+... print("After deduplication:", stg_orders.count())
+... 
+... stg_orders \
+...     .groupBy("order_id") \
+...     .count() \
+...     .filter(F.col("count") > 1) \
+...     .show()
+After deduplication: 2829
++--------+-----+
+|order_id|count|
++--------+-----+
++--------+-----+
+
+
+>>> [cellule 7]
+... orders_typed.createOrReplaceTempView("orders_typed")
+... 
+... stg_orders_sql = spark.sql('''
+...     SELECT order_id, user_id, ordered_at, quantity, product
+...     FROM (
+...         SELECT *,
+...                row_number() OVER (PARTITION BY order_id ORDER BY ordered_at DESC) AS rn
+...         FROM orders_typed
+...     )
+...     WHERE rn = 1
+... ''')
+... 
+... stg_orders_sql.show(5)
++--------------------+--------------------+--------------------+--------+---------+
+|            order_id|             user_id|          ordered_at|quantity|  product|
++--------------------+--------------------+--------------------+--------+---------+
+|00060d5a-02b3-494...|f53d4330-cdda-44b...|2020-01-28 12:31:...|       2|   cookie|
+|0011be30-e268-492...|5f733a3e-5d28-4aa...|2020-04-18 22:51:...|       5|    bread|
+|002394e2-2ad9-468...|90164161-cfa7-41c...|2020-02-24 01:03:...|       4|   cookie|
+|0041f5d4-9549-463...|aab612c9-415d-474...|2020-03-17 18:29:...|       2|croissant|
+|00684d9c-d2bf-4c3...|97fa7f04-8363-400...|2020-03-30 13:36:...|       4|    bread|
++--------------------+--------------------+--------------------+--------+---------+
+only showing top 5 rows
+
+>>> [cellule 8]
+... assert stg_orders.count() == stg_orders_sql.count()
+... assert set(stg_orders.columns) == set(stg_orders_sql.columns)
+... print("asserts OK")
+asserts OK
+
+>>> [cellule 9]
+... stg_users.createOrReplaceTempView("stg_users")
+... 
+... spark.sql('''
+...     SELECT state,
+...            count(*) AS users,
+...            sum(CASE WHEN city IS NULL THEN 1 ELSE 0 END) AS missing_city
+...     FROM stg_users
+...     GROUP BY state
+...     ORDER BY users DESC
+... ''').show(10)
++-----+-----+------------+
+|state|users|missing_city|
++-----+-----+------------+
+|   AE|    3|           3|
+|   FM|    3|           0|
+|   NJ|    2|           0|
+|   VT|    2|           0|
+|   DE|    2|           0|
+|   VI|    2|           0|
+|   NM|    2|           0|
+|   PA|    2|           0|
+|   TX|    2|           0|
+|   AP|    2|           2|
++-----+-----+------------+
+only showing top 10 rows
+
+>>> [cellule 10]
+... stg_users.write.mode("overwrite").parquet(f"s3a://{BUCKET}/silver/spark/users.parquet")
+... stg_orders.write.mode("overwrite").parquet(f"s3a://{BUCKET}/silver/spark/orders.parquet")
+... sh(f"aws s3 --profile default ls s3://{BUCKET}/silver/ --recursive")
+!!! EXCEPTION
+Traceback (most recent call last):
+  File "/home/onyxia/work/labkit/cells.py", line 18, in <module>
+    exec(compile(tree, "<cell>", "exec"), g)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<cell>", line 1, in <module>
+  File "/usr/local/lib/spark/python/lib/pyspark.zip/pyspark/sql/readwriter.py", line 2003, in parquet
+    self._jwrite.parquet(path)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^
+py4j.protocol.Py4JJavaError: An error occurred while calling o263.parquet.
+: org.apache.spark.SparkException: [INTERNAL_ERROR] Eagerly executed command failed. You hit a bug in Spark or the Spark plugins you use. Please, report this bug to the corresponding communities or vendors, and provide the full stack trace. SQLSTATE: XX000
+	at org.apache.spark.SparkException$.internalError(SparkException.scala:107)
+	at org.apache.spark.sql.execution.QueryExecution$.toInternalError(QueryExecution.scala:706)
+	at org.apache.spark.sql.execution.QueryExecution$.withInternalError(QueryExecution.scala:719)
+	at org.apache.spark.sql.execution.QueryExecution.org$apache$spark$sql$execution$QueryExecution$$eagerlyExecute$1(QueryExecution.scala:184)
+	at org.apache.spark.sql.execution.QueryExecution$$anonfun$eagerlyExecuteCommands$3.applyOrElse(QueryExecution.scala:201)
+	at org.apache.spark.sql.execution.QueryExecution$$anonfun$eagerlyExecuteCommands$3.applyOrElse(QueryExecution.scala:194)
+	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$transformDownWithPruning$1(TreeNode.scala:491)
+	at org.apache.spark.sql.catalyst.trees.CurrentOrigin$.withOrigin(origin.scala:107)
+	at org.apache.spark.sql.catalyst.trees.TreeNode.transformDownWithPruning(TreeNode.scala:491)
+	at org.apache.spark.sql.catalyst.plans.logical.LogicalPlan.org$apache$spark$sql$catalyst$plans$logical$AnalysisHelper$$super$transformDownWithPruning(LogicalPlan.scala:37)
+	at org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper.transformDownWithPruning(AnalysisHelper.scala:360)
+	at org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper.transformDownWithPruning$(AnalysisHelper.scala:356)
+	at org.apache.spark.sql.catalyst.plans.logical.LogicalPlan.transformDownWithPruning(LogicalPlan.scala:37)
+	at org.apache.spark.sql.catalyst.plans.logical.LogicalPlan.transformDownWithPruning(LogicalPlan.scala:37)
+	at org.apache.spark.sql.catalyst.trees.TreeNode.transformDown(TreeNode.scala:467)
+	at org.apache.spark.sql.execution.QueryExecution.eagerlyExecuteCommands(QueryExecution.scala:194)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyCommandExecuted$1(QueryExecution.scala:155)
+	at scala.util.Try$.apply(Try.scala:217)
+	at org.apache.spark.util.Utils$.doTryWithCallerStacktrace(Utils.scala:1392)
+	at org.apache.spark.util.Utils$.getTryWithCallerStacktrace(Utils.scala:1453)
+	at org.apache.spark.util.LazyTry.get(LazyTry.scala:58)
+	at org.apache.spark.sql.execution.QueryExecution.commandExecuted(QueryExecution.scala:160)
+	at org.apache.spark.sql.execution.QueryExecution.assertCommandExecuted(QueryExecution.scala:239)
+	at org.apache.spark.sql.classic.DataFrameWriter.runCommand(DataFrameWriter.scala:592)
+	at org.apache.spark.sql.classic.DataFrameWriter.save(DataFrameWriter.scala:115)
+	at org.apache.spark.sql.DataFrameWriter.parquet(DataFrameWriter.scala:369)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:75)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:52)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at py4j.reflection.MethodInvoker.invoke(MethodInvoker.java:244)
+	at py4j.reflection.ReflectionEngine.invoke(ReflectionEngine.java:374)
+	at py4j.Gateway.invoke(Gateway.java:282)
+	at py4j.commands.AbstractCommand.invokeMethod(AbstractCommand.java:132)
+	at py4j.commands.CallCommand.execute(CallCommand.java:79)
+	at py4j.ClientServerConnection.waitForCommands(ClientServerConnection.java:184)
+	at py4j.ClientServerConnection.run(ClientServerConnection.java:108)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.apache.spark.util.Utils$OriginalTryStackTraceException: Full stacktrace of original doTryWithCallerStacktrace caller
+		at org.apache.spark.SparkException$.internalError(SparkException.scala:107)
+		at org.apache.spark.sql.execution.QueryExecution$.toInternalError(QueryExecution.scala:706)
+		at org.apache.spark.sql.execution.QueryExecution$.withInternalError(QueryExecution.scala:719)
+		at org.apache.spark.sql.execution.QueryExecution.org$apache$spark$sql$execution$QueryExecution$$eagerlyExecute$1(QueryExecution.scala:184)
+		at org.apache.spark.sql.execution.QueryExecution$$anonfun$eagerlyExecuteCommands$3.applyOrElse(QueryExecution.scala:201)
+		at org.apache.spark.sql.execution.QueryExecution$$anonfun$eagerlyExecuteCommands$3.applyOrElse(QueryExecution.scala:194)
+		at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$transformDownWithPruning$1(TreeNode.scala:491)
+		at org.apache.spark.sql.catalyst.trees.CurrentOrigin$.withOrigin(origin.scala:107)
+		at org.apache.spark.sql.catalyst.trees.TreeNode.transformDownWithPruning(TreeNode.scala:491)
+		at org.apache.spark.sql.catalyst.plans.logical.LogicalPlan.org$apache$spark$sql$catalyst$plans$logical$AnalysisHelper$$super$transformDownWithPruning(LogicalPlan.scala:37)
+		at org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper.transformDownWithPruning(AnalysisHelper.scala:360)
+		at org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper.transformDownWithPruning$(AnalysisHelper.scala:356)
+		at org.apache.spark.sql.catalyst.plans.logical.LogicalPlan.transformDownWithPruning(LogicalPlan.scala:37)
+		at org.apache.spark.sql.catalyst.plans.logical.LogicalPlan.transformDownWithPruning(LogicalPlan.scala:37)
+		at org.apache.spark.sql.catalyst.trees.TreeNode.transformDown(TreeNode.scala:467)
+		at org.apache.spark.sql.execution.QueryExecution.eagerlyExecuteCommands(QueryExecution.scala:194)
+		at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyCommandExecuted$1(QueryExecution.scala:155)
+		at scala.util.Try$.apply(Try.scala:217)
+		at org.apache.spark.util.Utils$.doTryWithCallerStacktrace(Utils.scala:1392)
+		at org.apache.spark.util.LazyTry.tryT$lzycompute(LazyTry.scala:46)
+		at org.apache.spark.util.LazyTry.tryT(LazyTry.scala:46)
+		... 18 more
+Caused by: java.lang.NullPointerException: Cannot invoke "java.time.Instant.toEpochMilli()" because "instant" is null
+	at java.base/java.util.Date.from(Date.java:1361)
+	at org.apache.hadoop.fs.s3a.commit.AbstractS3ACommitter.lambda$warnOnActiveUploads$11(AbstractS3ACommitter.java:1304)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.Collections$UnmodifiableCollection.forEach(Collections.java:1117)
+	at org.apache.hadoop.fs.s3a.commit.AbstractS3ACommitter.warnOnActiveUploads(AbstractS3ACommitter.java:1302)
+	at org.apache.hadoop.fs.s3a.commit.AbstractS3ACommitter.setupJob(AbstractS3ACommitter.java:615)
+	at org.apache.hadoop.fs.s3a.commit.magic.MagicS3GuardCommitter.setupJob(MagicS3GuardCommitter.java:106)
+	at org.apache.spark.internal.io.HadoopMapReduceCommitProtocol.setupJob(HadoopMapReduceCommitProtocol.scala:180)
+	at org.apache.spark.sql.execution.datasources.FileFormatWriter$.writeAndCommit(FileFormatWriter.scala:268)
+	at org.apache.spark.sql.execution.datasources.FileFormatWriter$.executeWrite(FileFormatWriter.scala:306)
+	at org.apache.spark.sql.execution.datasources.FileFormatWriter$.write(FileFormatWriter.scala:189)
+	at org.apache.spark.sql.execution.datasources.InsertIntoHadoopFsRelationCommand.run(InsertIntoHadoopFsRelationCommand.scala:195)
+	at org.apache.spark.sql.execution.command.DataWritingCommandExec.sideEffectResult$lzycompute(commands.scala:117)
+	at org.apache.spark.sql.execution.command.DataWritingCommandExec.sideEffectResult(commands.scala:115)
+	at org.apache.spark.sql.execution.command.DataWritingCommandExec.executeCollect(commands.scala:129)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$eagerlyExecuteCommands$2(QueryExecution.scala:185)
+	at org.apache.spark.sql.execution.SQLExecution$.$anonfun$withNewExecutionId0$8(SQLExecution.scala:177)
+	at org.apache.spark.sql.execution.SQLExecution$.withSessionTagsApplied(SQLExecution.scala:285)
+	at org.apache.spark.sql.execution.SQLExecution$.$anonfun$withNewExecutionId0$7(SQLExecution.scala:139)
+	at org.apache.spark.JobArtifactSet$.withActiveJobArtifactState(JobArtifactSet.scala:94)
+	at org.apache.spark.sql.artifact.ArtifactManager.$anonfun$withResources$1(ArtifactManager.scala:112)
+	at org.apache.spark.sql.artifact.ArtifactManager.withClassLoaderIfNeeded(ArtifactManager.scala:106)
+	at org.apache.spark.sql.artifact.ArtifactManager.withResources(ArtifactManager.scala:111)
+	at org.apache.spark.sql.execution.SQLExecution$.$anonfun$withNewExecutionId0$6(SQLExecution.scala:139)
+	at org.apache.spark.sql.execution.SQLExecution$.withSQLConfPropagated(SQLExecution.scala:308)
+	at org.apache.spark.sql.execution.SQLExecution$.$anonfun$withNewExecutionId0$1(SQLExecution.scala:138)
+	at org.apache.spark.sql.SparkSession.withActive(SparkSession.scala:804)
+	at org.apache.spark.sql.execution.SQLExecution$.withNewExecutionId0(SQLExecution.scala:92)
+	at org.apache.spark.sql.execution.SQLExecution$.withNewExecutionId(SQLExecution.scala:250)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$eagerlyExecuteCommands$1(QueryExecution.scala:185)
+	at org.apache.spark.sql.execution.QueryExecution$.withInternalError(QueryExecution.scala:717)
+	at org.apache.spark.sql.execution.QueryExecution.org$apache$spark$sql$execution$QueryExecution$$eagerlyExecute$1(QueryExecution.scala:184)
+	at org.apache.spark.sql.execution.QueryExecution$$anonfun$eagerlyExecuteCommands$3.applyOrElse(QueryExecution.scala:201)
+	at org.apache.spark.sql.execution.QueryExecution$$anonfun$eagerlyExecuteCommands$3.applyOrElse(QueryExecution.scala:194)
+	at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$transformDownWithPruning$1(TreeNode.scala:491)
+	at org.apache.spark.sql.catalyst.trees.CurrentOrigin$.withOrigin(origin.scala:107)
+	at org.apache.spark.sql.catalyst.trees.TreeNode.transformDownWithPruning(TreeNode.scala:491)
+	at org.apache.spark.sql.catalyst.plans.logical.LogicalPlan.org$apache$spark$sql$catalyst$plans$logical$AnalysisHelper$$super$transformDownWithPruning(LogicalPlan.scala:37)
+	at org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper.transformDownWithPruning(AnalysisHelper.scala:360)
+	at org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper.transformDownWithPruning$(AnalysisHelper.scala:356)
+	at org.apache.spark.sql.catalyst.plans.logical.LogicalPlan.transformDownWithPruning(LogicalPlan.scala:37)
+	at org.apache.spark.sql.catalyst.plans.logical.LogicalPlan.transformDownWithPruning(LogicalPlan.scala:37)
+	at org.apache.spark.sql.catalyst.trees.TreeNode.transformDown(TreeNode.scala:467)
+	at org.apache.spark.sql.execution.QueryExecution.eagerlyExecuteCommands(QueryExecution.scala:194)
+	at org.apache.spark.sql.execution.QueryExecution.$anonfun$lazyCommandExecuted$1(QueryExecution.scala:155)
+	at scala.util.Try$.apply(Try.scala:217)
+	at org.apache.spark.util.Utils$.doTryWithCallerStacktrace(Utils.scala:1392)
+	at org.apache.spark.util.LazyTry.tryT$lzycompute(LazyTry.scala:46)
+	at org.apache.spark.util.LazyTry.tryT(LazyTry.scala:46)
+	... 18 more
+
+
+>>> [cellule 11]
+... users_silver = spark.read.parquet(f"s3a://{BUCKET}/silver/spark/users.parquet")
+... orders_silver = spark.read.parquet(f"s3a://{BUCKET}/silver/spark/orders.parquet")
+... assert users_silver.count() == users_bronze.count()
+... assert orders_silver.count() == stg_orders.count()
+... print("asserts OK", users_silver.count(), orders_silver.count())
+!!! EXCEPTION
+Traceback (most recent call last):
+  File "/home/onyxia/work/labkit/cells.py", line 18, in <module>
+    exec(compile(tree, "<cell>", "exec"), g)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<cell>", line 1, in <module>
+  File "/usr/local/lib/spark/python/lib/pyspark.zip/pyspark/sql/readwriter.py", line 642, in parquet
+    return self._df(self._jreader.parquet(_to_seq(self._spark._sc, paths)))
+                    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pyspark.errors.exceptions.captured.AnalysisException: [UNABLE_TO_INFER_SCHEMA] Unable to infer schema for Parquet. It must be specified manually. SQLSTATE: 42KD9
+
+>>> [cellule 12]
+... spark.sql("CREATE NAMESPACE IF NOT EXISTS lab.silver")
+... 
+... stg_users.writeTo("lab.silver.users").createOrReplace()
+... stg_orders.writeTo("lab.silver.orders").createOrReplace()
+... sh(f"aws s3 --profile default ls s3://{BUCKET}/warehouse/ --recursive")
+$ aws s3 --profile default ls s3://user-m-anane-ece/warehouse/ --recursive
+2026-11-04 13:03:26          0 warehouse/silver/
+2026-11-04 13:03:32      84055 warehouse/silver/orders/data/00000-43-19316fc3-6a81-4444-a77e-463cc4a7efa3-0-00001.parquet
+2026-11-04 13:03:32       7347 warehouse/silver/orders/metadata/d49e13b5-4371-4dd1-9500-5a87c11804dc-m0.avro
+2026-11-04 13:03:32       4456 warehouse/silver/orders/metadata/snap-5971824705520254429-1-d49e13b5-4371-4dd1-9500-5a87c11804dc.avro
+2026-11-04 13:03:33       1931 warehouse/silver/orders/metadata/v1.metadata.json
+2026-11-04 13:03:33          1 warehouse/silver/orders/metadata/version-hint.text
+2026-11-04 13:03:29       7438 warehouse/silver/users/data/00000-39-fae851cc-f83e-4b4b-821a-7462c66fde3f-0-00001.parquet
+2026-11-04 13:03:30       7737 warehouse/silver/users/metadata/10e4364a-08cb-40d7-ae28-731b213ecfec-m0.avro
+2026-11-04 13:03:30       4453 warehouse/silver/users/metadata/snap-2234938568710704734-1-10e4364a-08cb-40d7-ae28-731b213ecfec.avro
+2026-11-04 13:03:30       2200 warehouse/silver/users/metadata/v1.metadata.json
+2026-11-04 13:03:31          1 warehouse/silver/users/metadata/version-hint.text
+
+
+>>> [cellule 13]
+... spark.sql("""
+...     SELECT snapshot_id, operation, committed_at
+...     FROM lab.silver.orders.snapshots
+... """).show(truncate=False)
+... 
+... spark.sql("""
+...     SELECT file_path, file_format, record_count, file_size_in_bytes
+...     FROM lab.silver.orders.files
+... """).show(truncate=False)
++-------------------+---------+-----------------------+
+|snapshot_id        |operation|committed_at           |
++-------------------+---------+-----------------------+
+|5971824705520254429|overwrite|2026-11-04 13:03:32.922|
++-------------------+---------+-----------------------+
+
++-----------------------------------------------------------------------------------------------------------------+-----------+------------+------------------+
+|file_path                                                                                                        |file_format|record_count|file_size_in_bytes|
++-----------------------------------------------------------------------------------------------------------------+-----------+------------+------------------+
+|s3a://user-m-anane-ece/warehouse/silver/orders/data/00000-43-19316fc3-6a81-4444-a77e-463cc4a7efa3-0-00001.parquet|PARQUET    |2829        |84055             |
++-----------------------------------------------------------------------------------------------------------------+-----------+------------+------------------+
+
+
+>>> [cellule 14]
+... users_iceberg = spark.table("lab.silver.users")
+... orders_iceberg = spark.table("lab.silver.orders")
+... assert users_iceberg.count() == users_bronze.count()
+... assert orders_iceberg.count() == stg_orders.count()
+... print("asserts OK", users_iceberg.count(), orders_iceberg.count())
+asserts OK 50 2829
+
+>>> [cellule 15]
+... # Exercice 1 : birthdate_is_valid (DataFrame puis SQL)
+... first_orders = stg_orders.groupBy("user_id").agg(F.min("ordered_at").alias("first_ordered_at"))
+... users_valid_df = stg_users.join(first_orders, "user_id", "left").withColumn(
+...     "birthdate_is_valid", F.coalesce(F.col("birthdate") <= F.col("first_ordered_at").cast("date"), F.lit(True))
+... ).drop("first_ordered_at")
+... stg_orders.createOrReplaceTempView("stg_orders")
+... users_valid_sql = spark.sql('''
+...     SELECT u.*, coalesce(u.birthdate <= CAST(f.first_ordered_at AS DATE), true) AS birthdate_is_valid
+...     FROM stg_users u
+...     LEFT JOIN (SELECT user_id, min(ordered_at) AS first_ordered_at FROM stg_orders GROUP BY user_id) f
+...     ON u.user_id = f.user_id
+... ''')
+... users_valid_df.groupBy("birthdate_is_valid").count().show()
+... diff = users_valid_df.select("user_id", "birthdate_is_valid").exceptAll(users_valid_sql.select("user_id", "birthdate_is_valid")).count()
+... print("differences DataFrame vs SQL:", diff)
++------------------+-----+
+|birthdate_is_valid|count|
++------------------+-----+
+|              true|   45|
+|             false|    5|
++------------------+-----+
+
+differences DataFrame vs SQL: 0
+
+>>> [cellule 16]
+... # Exercice 2 : UDF Python et pandas_udf contre regexp_extract
+... import re
+... from pyspark.sql.types import StringType
+... ZIP = re.compile(r"([A-Z]{2}) ([0-9]{5})$")
+... @F.udf(StringType())
+... def zip_udf(address):
+...     if address is None:
+...         return None
+...     m = ZIP.search(address.split("\n")[-1])
+...     return m.group(2) if m else ""
+... def timeit(label, df, n=5):
+...     df.count()
+...     t = time.perf_counter()
+...     for _ in range(n):
+...         df.select(F.max("z")).collect()
+...     print("%-16s %.3f s / execution" % (label, (time.perf_counter() - t) / n))
+... users_cached = users_bronze.cache()
+... users_cached.count()
+... timeit("regexp_extract", users_cached.select(F.regexp_extract(F.element_at(F.split("address", "\n"), 2), "([A-Z]{2}) ([0-9]{5})$", 2).alias("z")))
+... timeit("python udf", users_cached.select(zip_udf("address").alias("z")))
+... try:
+...     import pandas as pd
+...     from pyspark.sql.functions import pandas_udf
+...     @pandas_udf(StringType())
+...     def zip_pudf(address: pd.Series) -> pd.Series:
+...         return address.str.split("\n").str[-1].str.extract(r"([A-Z]{2}) ([0-9]{5})$")[1].fillna("")
+...     timeit("pandas_udf", users_cached.select(zip_pudf("address").alias("z")))
+... except Exception as e:
+...     print("pandas_udf indisponible :", type(e).__name__, e)
+regexp_extract   0.251 s / execution
+python udf       0.638 s / execution
+pandas_udf       0.500 s / execution
+
+>>> [cellule 17]
+... # Exercice 3 : cache des DataFrames bronze
+... t = time.perf_counter(); orders_bronze.count(); print("sans cache : %.3f s" % (time.perf_counter() - t))
+... orders_bronze.cache(); orders_bronze.count()
+... t = time.perf_counter(); orders_bronze.count(); print("avec cache : %.3f s" % (time.perf_counter() - t))
+... print("niveau de stockage :", orders_bronze.storageLevel)
+sans cache : 0.240 s
+avec cache : 0.119 s
+niveau de stockage : Disk Memory Deserialized 1x Replicated
+
+>>> [cellule 18]
+... # Exercice 4 : append d'une commande, snapshots et time travel (VERSION AS OF)
+... one = stg_orders.limit(1).withColumn("order_id", F.expr("uuid()"))
+... one.writeTo("lab.silver.orders").append()
+... snaps = spark.sql("SELECT snapshot_id, operation, committed_at FROM lab.silver.orders.snapshots ORDER BY committed_at")
+... snaps.show(truncate=False)
+... first = snaps.collect()[0]["snapshot_id"]
+... spark.sql(f"SELECT count(*) AS before_append FROM lab.silver.orders VERSION AS OF {first}").show()
+... spark.sql("SELECT count(*) AS now FROM lab.silver.orders").show()
+... one.write.mode("append").parquet(f"s3a://{BUCKET}/silver/spark/orders.parquet")
+... print("parquet apres append :", spark.read.parquet(f"s3a://{BUCKET}/silver/spark/orders.parquet").count(), "(aucun moyen de relire l'etat precedent)")
++-------------------+---------+-----------------------+
+|snapshot_id        |operation|committed_at           |
++-------------------+---------+-----------------------+
+|5971824705520254429|overwrite|2026-11-04 13:03:32.922|
+|5530743030737104451|append   |2026-11-04 13:03:54.933|
++-------------------+---------+-----------------------+
+
++-------------+
+|before_append|
++-------------+
+|         2829|
++-------------+
+
++----+
+| now|
++----+
+|2830|
++----+
+
+parquet apres append : 1 (aucun moyen de relire l'etat precedent)
+
+>>> [cellule 19]
+... spark.stop()
+$ aws s3 --profile default sync s3://user-m-anane-ece/warehouse/ ./warehouse/
+Completed 1.9 KiB/~131.0 KiB (9.5 KiB/s) with ~12 file(s) remaining (calculating...)Completed 4.8 KiB/~133.2 KiB (21.1 KiB/s) with ~13 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/silver/orders/data/00000-127-d0a7b3e1-c214-4383-b533-ffd3b69869f1-0-00001.parquet to warehouse/silver/orders/data/00000-127-d0a7b3e1-c214-4383-b533-ffd3b69869f1-0-00001.parquet
+Completed 4.8 KiB/~133.2 KiB (21.1 KiB/s) with ~12 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/silver/orders/metadata/v2.metadata.json to warehouse/silver/orders/metadata/v2.metadata.json
+Completed 4.8 KiB/133.2 KiB (21.1 KiB/s) with 12 file(s) remainingCompleted 12.1 KiB/133.2 KiB (44.4 KiB/s) with 12 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/data/00000-39-fae851cc-f83e-4b4b-821a-7462c66fde3f-0-00001.parquet to warehouse/silver/users/data/00000-39-fae851cc-f83e-4b4b-821a-7462c66fde3f-0-00001.parquet
+Completed 12.1 KiB/133.2 KiB (44.4 KiB/s) with 11 file(s) remainingCompleted 19.3 KiB/133.2 KiB (63.0 KiB/s) with 11 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/d49e13b5-4371-4dd1-9500-5a87c11804dc-m0.avro to warehouse/silver/orders/metadata/d49e13b5-4371-4dd1-9500-5a87c11804dc-m0.avro
+Completed 19.3 KiB/133.2 KiB (63.0 KiB/s) with 10 file(s) remainingCompleted 21.4 KiB/133.2 KiB (66.1 KiB/s) with 10 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/v1.metadata.json to warehouse/silver/users/metadata/v1.metadata.json
+Completed 21.4 KiB/133.2 KiB (66.1 KiB/s) with 9 file(s) remainingCompleted 21.4 KiB/133.2 KiB (64.8 KiB/s) with 9 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/version-hint.text to warehouse/silver/users/metadata/version-hint.text
+Completed 21.4 KiB/133.2 KiB (64.8 KiB/s) with 8 file(s) remainingCompleted 103.5 KiB/133.2 KiB (274.0 KiB/s) with 8 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/data/00000-43-19316fc3-6a81-4444-a77e-463cc4a7efa3-0-00001.parquet to warehouse/silver/orders/data/00000-43-19316fc3-6a81-4444-a77e-463cc4a7efa3-0-00001.parquet
+Completed 103.5 KiB/133.2 KiB (274.0 KiB/s) with 7 file(s) remainingCompleted 110.6 KiB/133.2 KiB (279.4 KiB/s) with 7 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/661ceae2-4261-4929-8912-3aad37fc6201-m0.avro to warehouse/silver/orders/metadata/661ceae2-4261-4929-8912-3aad37fc6201-m0.avro
+Completed 110.6 KiB/133.2 KiB (279.4 KiB/s) with 6 file(s) remainingCompleted 115.0 KiB/133.2 KiB (263.2 KiB/s) with 6 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/snap-5530743030737104451-1-661ceae2-4261-4929-8912-3aad37fc6201.avro to warehouse/silver/orders/metadata/snap-5530743030737104451-1-661ceae2-4261-4929-8912-3aad37fc6201.avro
+Completed 115.0 KiB/133.2 KiB (263.2 KiB/s) with 5 file(s) remainingCompleted 116.9 KiB/133.2 KiB (225.8 KiB/s) with 5 file(s) remainingCompleted 121.3 KiB/133.2 KiB (234.0 KiB/s) with 5 file(s) remainingCompleted 125.6 KiB/133.2 KiB (241.2 KiB/s) with 5 file(s) remainingCompleted 125.6 KiB/133.2 KiB (237.3 KiB/s) with 5 file(s) remainingCompleted 133.2 KiB/133.2 KiB (251.2 KiB/s) with 5 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/version-hint.text to warehouse/silver/orders/metadata/version-hint.text
+Completed 133.2 KiB/133.2 KiB (251.2 KiB/s) with 4 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/v1.metadata.json to warehouse/silver/orders/metadata/v1.metadata.json
+Completed 133.2 KiB/133.2 KiB (251.2 KiB/s) with 3 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/snap-2234938568710704734-1-10e4364a-08cb-40d7-ae28-731b213ecfec.avro to warehouse/silver/users/metadata/snap-2234938568710704734-1-10e4364a-08cb-40d7-ae28-731b213ecfec.avro
+Completed 133.2 KiB/133.2 KiB (251.2 KiB/s) with 2 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/snap-5971824705520254429-1-d49e13b5-4371-4dd1-9500-5a87c11804dc.avro to warehouse/silver/orders/metadata/snap-5971824705520254429-1-d49e13b5-4371-4dd1-9500-5a87c11804dc.avro
+Completed 133.2 KiB/133.2 KiB (251.2 KiB/s) with 1 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/10e4364a-08cb-40d7-ae28-731b213ecfec-m0.avro to warehouse/silver/users/metadata/10e4364a-08cb-40d7-ae28-731b213ecfec-m0.avro
+$ find warehouse -type f
+$ sort
+warehouse/silver/orders/data/00000-127-d0a7b3e1-c214-4383-b533-ffd3b69869f1-0-00001.parquet
+warehouse/silver/orders/data/00000-43-19316fc3-6a81-4444-a77e-463cc4a7efa3-0-00001.parquet
+warehouse/silver/orders/metadata/661ceae2-4261-4929-8912-3aad37fc6201-m0.avro
+warehouse/silver/orders/metadata/d49e13b5-4371-4dd1-9500-5a87c11804dc-m0.avro
+warehouse/silver/orders/metadata/snap-5530743030737104451-1-661ceae2-4261-4929-8912-3aad37fc6201.avro
+warehouse/silver/orders/metadata/snap-5971824705520254429-1-d49e13b5-4371-4dd1-9500-5a87c11804dc.avro
+warehouse/silver/orders/metadata/v1.metadata.json
+warehouse/silver/orders/metadata/v2.metadata.json
+warehouse/silver/orders/metadata/version-hint.text
+warehouse/silver/users/data/00000-39-fae851cc-f83e-4b4b-821a-7462c66fde3f-0-00001.parquet
+warehouse/silver/users/metadata/10e4364a-08cb-40d7-ae28-731b213ecfec-m0.avro
+warehouse/silver/users/metadata/snap-2234938568710704734-1-10e4364a-08cb-40d7-ae28-731b213ecfec.avro
+warehouse/silver/users/metadata/v1.metadata.json
+warehouse/silver/users/metadata/version-hint.text
+$ git add ./warehouse/silver/orders/metadata ./warehouse/silver/users/metadata
+$ git commit -m 'feat(spark-lab): add Iceberg table metadata'
+[main 6bad95e] feat(spark-lab): add Iceberg table metadata
+ 11 files changed, 5 insertions(+)
+ create mode 100644 warehouse/silver/orders/metadata/661ceae2-4261-4929-8912-3aad37fc6201-m0.avro
+ create mode 100644 warehouse/silver/orders/metadata/d49e13b5-4371-4dd1-9500-5a87c11804dc-m0.avro
+ create mode 100644 warehouse/silver/orders/metadata/snap-5530743030737104451-1-661ceae2-4261-4929-8912-3aad37fc6201.avro
+ create mode 100644 warehouse/silver/orders/metadata/snap-5971824705520254429-1-d49e13b5-4371-4dd1-9500-5a87c11804dc.avro
+ create mode 100644 warehouse/silver/orders/metadata/v1.metadata.json
+ create mode 100644 warehouse/silver/orders/metadata/v2.metadata.json
+ create mode 100644 warehouse/silver/orders/metadata/version-hint.text
+ create mode 100644 warehouse/silver/users/metadata/10e4364a-08cb-40d7-ae28-731b213ecfec-m0.avro
+ create mode 100644 warehouse/silver/users/metadata/snap-2234938568710704734-1-10e4364a-08cb-40d7-ae28-731b213ecfec.avro
+ create mode 100644 warehouse/silver/users/metadata/v1.metadata.json
+ create mode 100644 warehouse/silver/users/metadata/version-hint.text
+$ gpush
+$ echo '[git push differe : il sera fait a la fin, avec l'\''authentification GitHub de l'\''utilisateur]'
+[git push differe : il sera fait a la fin, avec l'authentification GitHub de l'utilisateur]
+$ duckdb -c '
+  SELECT '\''dbt'\'' AS engine, count(*) AS orders, sum(quantity) AS quantity
+  FROM '\''s3://user-m-anane-ece/silver/dbt/orders.parquet'\''
+  UNION ALL
+  SELECT '\''spark'\'', count(*), sum(quantity)
+  FROM '\''s3://user-m-anane-ece/silver/spark/orders.parquet/*.parquet'\''
+'
+-- Loading resources from /home/onyxia/.duckdbrc
+┌─────────┬────────┬──────────┐
+│ engine  │ orders │ quantity │
+│ varchar │ int64  │  int128  │
+├─────────┼────────┼──────────┤
+│ dbt     │   2829 │     8615 │
+│ spark   │      1 │        2 │
+└─────────┴────────┴──────────┘
+$ duckdb -c '
+  SELECT '\''dbt'\'' AS engine, count(*) AS users
+  FROM '\''s3://user-m-anane-ece/silver/dbt/users.parquet'\''
+  UNION ALL
+  SELECT '\''spark'\'', count(*)
+  FROM '\''s3://user-m-anane-ece/silver/spark/users.parquet/*.parquet'\''
+'
+-- Loading resources from /home/onyxia/.duckdbrc
+IO Error: No files found that match the pattern "s3://user-m-anane-ece/silver/spark/users.parquet/*.parquet"
+$ duckdb -c 'DESCRIBE SELECT * FROM '\''s3://user-m-anane-ece/silver/dbt/orders.parquet'\'''
+-- Loading resources from /home/onyxia/.duckdbrc
+┌─────────────────────────────────────────────────┐
+│ s3://user-m-anane-ece/silver/dbt/orders.parquet │
+│                                                 │
+│ order_id               uuid                     │
+│ user_id                uuid                     │
+│ ordered_at             timestamp with time zone │
+│ quantity               integer                  │
+│ product                varchar                  │
+└─────────────────────────────────────────────────┘
+$ duckdb -c 'DESCRIBE SELECT * FROM '\''s3://user-m-anane-ece/silver/spark/orders.parquet/*.parquet'\'''
+-- Loading resources from /home/onyxia/.duckdbrc
+┌─────────────────────────────────────────────────────────────┐
+│ s3://user-m-anane-ece/silver/spark/orders.parquet/*.parquet │
+│                                                             │
+│ order_id                                          varchar   │
+│ user_id                                           varchar   │
+│ ordered_at                                        timestamp │
+│ quantity                                          integer   │
+│ product                                           varchar   │
+└─────────────────────────────────────────────────────────────┘
+$ aws s3 --profile default ls s3://user-m-anane-ece/ --recursive
+$ awk '{print $4}'
+$ cut -d/ -f1-3
+$ sort
+$ uniq -c
+      1 bronze/orders.csv
+      1 bronze/users.csv
+      1 silver/dbt/orders.parquet
+      1 silver/dbt/users.parquet
+      3 silver/spark/orders.parquet
+      1 warehouse/silver/
+      9 warehouse/silver/orders
+      5 warehouse/silver/users
+$ true
+EXIT_CODE=0

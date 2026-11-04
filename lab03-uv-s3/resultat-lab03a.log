@@ -1,0 +1,196 @@
+===== lab03a - Wed Nov  4 12:38:17 PM UTC 2026 =====
+$ pwd
+/home/onyxia/work
+$ mkdir /home/onyxia/work/ece-2026-bigdata
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ git config --global init.defaultBranch main
+$ git init
+Initialized empty Git repository in /home/onyxia/work/ece-2026-bigdata/.git/
+$ cat
+$ git config --global user.name
+m-anane-ece
+$ git config --global user.email
+mohamed.anane@edu.ece.fr
+$ command -v uv
+/opt/python/bin/uv
+$ uv init --package
+Initialized project `ece-2026-bigdata`
+$ uv sync
+Using CPython 3.13.15 interpreter at: /opt/python/bin/python3.13
+Creating virtual environment at: .venv
+Resolved 1 package in 4ms
+   Building ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+      Built ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+Prepared 1 package in 13ms
+Installed 1 package in 4ms
+ + ece-2026-bigdata==0.1.0 (from file:///home/onyxia/work/ece-2026-bigdata)
+$ ls -a
+.
+..
+.git
+.gitignore
+pyproject.toml
+.python-version
+README.md
+src
+uv.lock
+.venv
+$ cat pyproject.toml
+[project]
+name = "ece-2026-bigdata"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "m-anane-ece", email = "mohamed.anane@edu.ece.fr" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+ece-2026-bigdata = "ece_2026_bigdata:main"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
+$ git add .gitignore .python-version pyproject.toml README.md src uv.lock
+$ git commit -m 'feat: initial project layout'
+[main (root-commit) 96d03bc] feat: initial project layout
+ 6 files changed, 32 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 .python-version
+ create mode 100644 README.md
+ create mode 100644 pyproject.toml
+ create mode 100644 src/ece_2026_bigdata/__init__.py
+ create mode 100644 uv.lock
+$ gpush -u origin main
+$ git remote get-url origin
+$ echo '[push differe : le depot GitHub n'\''est pas encore relie]'
+[push differe : le depot GitHub n'est pas encore relie]
+$ cat
+$ git add README.md
+$ git commit -m 'docs: project introduction and usages'
+[main 93e283a] docs: project introduction and usages
+ 1 file changed, 13 insertions(+)
+$ gpush
+$ git remote get-url origin
+$ echo '[push differe : le depot GitHub n'\''est pas encore relie]'
+[push differe : le depot GitHub n'est pas encore relie]
+$ cat
+$ uv add 'faker>=40.37.0'
+Resolved 3 packages in 266ms
+   Building ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+      Built ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+Downloading faker (2.0MiB)
+ Downloaded faker
+Prepared 2 packages in 123ms
+Uninstalled 1 package in 0.67ms
+Installed 2 packages in 49ms
+ ~ ece-2026-bigdata==0.1.0 (from file:///home/onyxia/work/ece-2026-bigdata)
+ + faker==40.44.0
+$ cat pyproject.toml
+[project]
+name = "ece-2026-bigdata"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "m-anane-ece", email = "mohamed.anane@edu.ece.fr" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "faker>=40.37.0",
+]
+
+[project.scripts]
+ece-2026-bigdata = "ece_2026_bigdata:main"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
+$ cat
+$ cat
+$ python3 -
+$ cat pyproject.toml
+[project]
+name = "ece-2026-bigdata"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "m-anane-ece", email = "mohamed.anane@edu.ece.fr" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "faker>=40.37.0",
+]
+
+[project.scripts]
+dataset-users = "ece_2026_bigdata.dataset_users:main"
+dataset-orders = "ece_2026_bigdata.dataset_orders:main"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
+$ uv run dataset-users -h
+   Building ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+      Built ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+Uninstalled 1 package in 0.48ms
+Installed 1 package in 3ms
+usage: dataset-users [-h] [-c COUNT] [-o {csv,json,jsonline}]
+
+Users generator
+
+options:
+  -h, --help            show this help message and exit
+  -c, --count COUNT     Number of users to generate.
+  -o, --output {csv,json,jsonline}
+                        Output format.
+$ uv run dataset-users -c 2 -o jsonline
+{"uuid": "bdd640fb-0667-4ad1-9c80-317fa3b1799d", "username": "garzaanthony", "name": "Charles Garcia", "sex": "M", "address": "908 Jennifer Squares\nRobinsonshire, KY 01352", "mail": "helenpeterson@gmail.com", "birthdate": "1935-10-26"}
+{"uuid": "17be3111-1a2a-43ed-962b-0f79c37459ee", "username": "blairamanda", "name": "Ryan Munoz", "sex": "M", "address": "Unit 6184 Box 9593\nDPO AP 09617", "mail": "stanleykendra@gmail.com", "birthdate": "2010-01-21"}
+$ uv run dataset-orders -h
+usage: dataset-orders [-h] [-C COUNT_MIN] [-c COUNT_MAX] [-d DATE_FROM]
+                      [-o {csv,json,jsonline}] [-u COUNT_USERS]
+
+Orders generator
+
+options:
+  -h, --help            show this help message and exit
+  -C, --count-min COUNT_MIN
+                        Minimum number of orders to generate per user.
+  -c, --count-max COUNT_MAX
+                        Maximum number of orders to generate per user.
+  -d, --date-from DATE_FROM
+                        Date of the first order, in ISO format (default:
+                        2020-01-01).
+  -o, --output {csv,json,jsonline}
+                        Output format.
+  -u, --count-users COUNT_USERS
+                        Number of users to generate.
+$ uv run dataset-orders -u 2 -C 1 -c 2 -o json
+$ jq '.[0]'
+{
+  "uuid": "a2bc372f-7412-4293-8729-4739614ff3d7",
+  "user_uuid": "bdd640fb-0667-4ad1-9c80-317fa3b1799d",
+  "date": "2020-01-01 00:50:02.797536+00:00",
+  "quantity": 2,
+  "product": "cookie"
+}
+$ git add pyproject.toml uv.lock src
+$ git commit -m 'feat: dataset generation scripts'
+[main 79b8620] feat: dataset generation scripts
+ 5 files changed, 172 insertions(+), 2 deletions(-)
+ create mode 100644 src/ece_2026_bigdata/dataset_orders.py
+ create mode 100644 src/ece_2026_bigdata/dataset_users.py
+ create mode 100644 src/ece_2026_bigdata/serialize.py
+$ gpush
+$ git remote get-url origin
+$ echo '[push differe : le depot GitHub n'\''est pas encore relie]'
+[push differe : le depot GitHub n'est pas encore relie]
+$ git log --oneline
+79b8620 feat: dataset generation scripts
+93e283a docs: project introduction and usages
+96d03bc feat: initial project layout
+$ true
+EXIT_CODE=0

@@ -1,0 +1,175 @@
+===== lab01 - Wed Nov  4 12:31:00 PM UTC 2026 =====
+$ mkdir -p /home/onyxia/data-platform-lab
+$ cd /home/onyxia/data-platform-lab
+$ mkdir bronze
+$ mkdir -p data/silver/customers
+$ mkdir -p data/gold/metrics
+$ mkdir -p data/bronze
+$ ls -lR .
+.:
+total 8
+drwxr-xr-x 2 onyxia users 4096 Nov  4 12:31 bronze
+drwxr-xr-x 5 onyxia users 4096 Nov  4 12:31 data
+
+./bronze:
+total 0
+
+./data:
+total 12
+drwxr-xr-x 2 onyxia users 4096 Nov  4 12:31 bronze
+drwxr-xr-x 3 onyxia users 4096 Nov  4 12:31 gold
+drwxr-xr-x 3 onyxia users 4096 Nov  4 12:31 silver
+
+./data/bronze:
+total 0
+
+./data/gold:
+total 4
+drwxr-xr-x 2 onyxia users 4096 Nov  4 12:31 metrics
+
+./data/gold/metrics:
+total 0
+
+./data/silver:
+total 4
+drwxr-xr-x 2 onyxia users 4096 Nov  4 12:31 customers
+
+./data/silver/customers:
+total 0
+$ ls -lha .
+total 20K
+drwxr-xr-x 4 onyxia users 4.0K Nov  4 12:31 .
+drwxr-x--- 1 onyxia users 4.0K Nov  4 12:31 ..
+drwxr-xr-x 2 onyxia users 4.0K Nov  4 12:31 bronze
+drwxr-xr-x 5 onyxia users 4.0K Nov  4 12:31 data
+$ cat
+$ cat data/bronze/customers.csv
+id,name,email,created_at
+1,Alice Johnson,alice@example.com,2024-01-15
+2,Bob Smith,bob@example.com,2024-02-20
+3,Carol White,carol@example.com,2024-03-10
+$ cat
+$ head -n 5 data/bronze/spark_log.txt
+2024-01-15T10:23:45 INFO Starting Spark job
+2024-01-15T10:23:46 INFO Initializing RDD
+2024-01-15T10:23:47 DEBUG Partition 1 assigned to worker-1
+2024-01-15T10:23:48 DEBUG Partition 2 assigned to worker-2
+2024-01-15T10:24:00 INFO Map phase complete
+$ head data/bronze/spark_log.txt
+2024-01-15T10:23:45 INFO Starting Spark job
+2024-01-15T10:23:46 INFO Initializing RDD
+2024-01-15T10:23:47 DEBUG Partition 1 assigned to worker-1
+2024-01-15T10:23:48 DEBUG Partition 2 assigned to worker-2
+2024-01-15T10:24:00 INFO Map phase complete
+2024-01-15T10:24:15 INFO Shuffle phase complete
+2024-01-15T10:24:30 INFO Reduce phase complete
+2024-01-15T10:24:45 INFO Job succeeded
+2024-01-15T10:24:46 INFO Output written to HDFS
+2024-01-15T10:24:47 INFO Cleaning up
+$ tail -n 3 data/bronze/spark_log.txt
+2024-01-15T10:24:45 INFO Job succeeded
+2024-01-15T10:24:46 INFO Output written to HDFS
+2024-01-15T10:24:47 INFO Cleaning up
+$ sleep 2
+$ timeout 5 tail -f data/bronze/spark_log.txt
+$ echo '2024-01-15T10:25:00 INFO New event'
+$ sleep 1
+$ echo '2024-01-15T10:25:01 INFO Another event'
+$ wait
+$ cat /tmp/tailf.out
+2024-01-15T10:23:45 INFO Starting Spark job
+2024-01-15T10:23:46 INFO Initializing RDD
+2024-01-15T10:23:47 DEBUG Partition 1 assigned to worker-1
+2024-01-15T10:23:48 DEBUG Partition 2 assigned to worker-2
+2024-01-15T10:24:00 INFO Map phase complete
+2024-01-15T10:24:15 INFO Shuffle phase complete
+2024-01-15T10:24:30 INFO Reduce phase complete
+2024-01-15T10:24:45 INFO Job succeeded
+2024-01-15T10:24:46 INFO Output written to HDFS
+2024-01-15T10:24:47 INFO Cleaning up
+2024-01-15T10:25:00 INFO New event
+2024-01-15T10:25:01 INFO Another event
+$ cp data/bronze/customers.csv data/bronze/customers_archive.csv
+$ ls -l data/bronze/
+total 12
+-rw-r--r-- 1 onyxia users 152 Nov  4 12:31 customers_archive.csv
+-rw-r--r-- 1 onyxia users 152 Nov  4 12:31 customers.csv
+-rw-r--r-- 1 onyxia users 541 Nov  4 12:31 spark_log.txt
+$ cp -r data/bronze data/bronze_backup
+$ ls -lR data/bronze_backup/
+data/bronze_backup/:
+total 12
+-rw-r--r-- 1 onyxia users 152 Nov  4 12:31 customers_archive.csv
+-rw-r--r-- 1 onyxia users 152 Nov  4 12:31 customers.csv
+-rw-r--r-- 1 onyxia users 541 Nov  4 12:31 spark_log.txt
+$ cp -v data/bronze/spark_log.txt data/silver/spark_log.txt
+'data/bronze/spark_log.txt' -> 'data/silver/spark_log.txt'
+$ mv data/silver/spark_log.txt data/silver/spark_log_archive.txt
+$ ls -l data/silver/
+total 8
+drwxr-xr-x 2 onyxia users 4096 Nov  4 12:31 customers
+-rw-r--r-- 1 onyxia users  541 Nov  4 12:31 spark_log_archive.txt
+$ mv data/bronze/customers_archive.csv data/silver/
+$ ls -l data/silver/
+total 12
+drwxr-xr-x 2 onyxia users 4096 Nov  4 12:31 customers
+-rw-r--r-- 1 onyxia users  152 Nov  4 12:31 customers_archive.csv
+-rw-r--r-- 1 onyxia users  541 Nov  4 12:31 spark_log_archive.txt
+$ grep -c ERROR data/bronze/spark_log.txt
+0
+$ grep -in info data/bronze/spark_log.txt
+1:2024-01-15T10:23:45 INFO Starting Spark job
+2:2024-01-15T10:23:46 INFO Initializing RDD
+5:2024-01-15T10:24:00 INFO Map phase complete
+6:2024-01-15T10:24:15 INFO Shuffle phase complete
+7:2024-01-15T10:24:30 INFO Reduce phase complete
+8:2024-01-15T10:24:45 INFO Job succeeded
+9:2024-01-15T10:24:46 INFO Output written to HDFS
+10:2024-01-15T10:24:47 INFO Cleaning up
+11:2024-01-15T10:25:00 INFO New event
+12:2024-01-15T10:25:01 INFO Another event
+$ grep -B1 -A1 'phase complete' data/bronze/spark_log.txt
+2024-01-15T10:23:48 DEBUG Partition 2 assigned to worker-2
+2024-01-15T10:24:00 INFO Map phase complete
+2024-01-15T10:24:15 INFO Shuffle phase complete
+2024-01-15T10:24:30 INFO Reduce phase complete
+2024-01-15T10:24:45 INFO Job succeeded
+$ find data/ -type d
+$ read dir
+$$ ls data/
+$$ wc -l
+$ echo 'data/: 4'
+data/: 4
+$ read dir
+$$ ls data/bronze_backup
+$$ wc -l
+$ echo 'data/bronze_backup: 3'
+data/bronze_backup: 3
+$ read dir
+$$ ls data/gold
+$$ wc -l
+$ echo 'data/gold: 1'
+data/gold: 1
+$ read dir
+$$ ls data/gold/metrics
+$$ wc -l
+$ echo 'data/gold/metrics: 0'
+data/gold/metrics: 0
+$ read dir
+$$ ls data/silver
+$$ wc -l
+$ echo 'data/silver: 3'
+data/silver: 3
+$ read dir
+$$ ls data/silver/customers
+$$ wc -l
+$ echo 'data/silver/customers: 0'
+data/silver/customers: 0
+$ read dir
+$$ ls data/bronze
+$$ wc -l
+$ echo 'data/bronze: 2'
+data/bronze: 2
+$ read dir
+$ true
+EXIT_CODE=0

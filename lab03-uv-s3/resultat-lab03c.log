@@ -1,0 +1,84 @@
+===== lab03c - Wed Nov  4 12:47:15 PM UTC 2026 =====
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ kubectl get pods
+NAME                      READY   STATUS    RESTARTS   AGE
+vscode-pyspark-123865-0   1/1     Running   0          30m
+$ kubectl create configmap datasets --from-file=users.csv --from-file=orders.csv
+configmap/datasets created
+$$ aws configure get region --profile default
+$ kubectl create configmap s3-config --from-literal=AWS_ENDPOINT_URL=https://s3.seaweedfs.adm.adaltas.cloud --from-literal=AWS_DEFAULT_REGION=us-east-1 --from-literal=LAB_BUCKET_NAME=user-m-anane-ece
+configmap/s3-config created
+$ set +x
+$ kubectl create secret generic s3-credentials --from-env-file=s3.env
+secret/s3-credentials created
+$ rm s3.env
+$ cat job-upload-bronze.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: upload-bronze
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: upload
+          image: amazon/aws-cli:latest
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              for dataset in users orders; do
+                aws s3 cp "/data/$dataset.csv" "s3://$LAB_BUCKET_NAME/bronze/$dataset.csv"
+              done
+              aws s3 ls "s3://$LAB_BUCKET_NAME/bronze/" --recursive
+          envFrom:
+            - configMapRef:
+                name: s3-config
+            - secretRef:
+                name: s3-credentials
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: datasets
+              mountPath: /data
+              readOnly: true
+      volumes:
+        - name: datasets
+          configMap:
+            name: datasets
+$ kubectl apply -f job-upload-bronze.yaml
+job.batch/upload-bronze created
+$ kubectl wait --for=condition=complete job/upload-bronze --timeout=180s
+job.batch/upload-bronze condition met
+$ kubectl get job upload-bronze
+NAME            STATUS     COMPLETIONS   DURATION   AGE
+upload-bronze   Complete   1/1           21s        21s
+$ kubectl logs job/upload-bronze
+Completed 7.2 KiB/7.2 KiB (125.1 KiB/s) with 1 file(s) remainingupload: ../data/users.csv to s3://user-m-anane-ece/bronze/users.csv
+Completed 323.8 KiB/323.8 KiB (2.0 MiB/s) with 1 file(s) remainingupload: ../data/orders.csv to s3://user-m-anane-ece/bronze/orders.csv
+2026-11-04 12:47:31     331568 bronze/orders.csv
+2026-11-04 12:47:25       7351 bronze/users.csv
+$ aws s3 --profile default ls s3://user-m-anane-ece/bronze/ --recursive
+2026-11-04 12:47:31     331568 bronze/orders.csv
+2026-11-04 12:47:25       7351 bronze/users.csv
+$ kubectl delete -f job-upload-bronze.yaml
+job.batch "upload-bronze" deleted from user-m-anane-ece namespace
+$ kubectl delete configmap datasets s3-config
+configmap "datasets" deleted from user-m-anane-ece namespace
+configmap "s3-config" deleted from user-m-anane-ece namespace
+$ kubectl delete secret s3-credentials
+secret "s3-credentials" deleted from user-m-anane-ece namespace
+$ rm -f job-upload-bronze.yaml
+$ kubectl get pods
+NAME                      READY   STATUS    RESTARTS   AGE
+vscode-pyspark-123865-0   1/1     Running   0          30m
+$ true
+EXIT_CODE=0

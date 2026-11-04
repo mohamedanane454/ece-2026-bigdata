@@ -1,0 +1,40 @@
+===== lab09c - Wed Nov  4 01:18:53 PM UTC 2026 =====
+$ bash /home/onyxia/work/labkit/setup.sh
+$$ aws configure export-credentials --profile default --format env
+$ eval 'export AWS_ACCESS_KEY_ID=ASIA***masque***
+export AWS_SECRET_ACCESS_KEY=***masque***
+export AWS_SESSION_TOKEN=***masque***
+$$ export AWS_ACCESS_KEY_ID=ASIA***masque***
+$$ AWS_ACCESS_KEY_ID=ASIA***masque***
+$$ export AWS_SECRET_ACCESS_KEY=***masque***
+$$ AWS_SECRET_ACCESS_KEY=***masque***
+$$ export AWS_SESSION_TOKEN=***masque***
+$$ AWS_SESSION_TOKEN=***masque***
+$ aws s3 --profile default ls s3://user-m-anane-ece/bronze/
+2026-11-04 12:47:31     331568 orders.csv
+2026-11-04 12:47:25       7351 users.csv
+$ set +x
+secret/polaris-s3 unchanged
+$ kubectl rollout restart deployment/polaris
+deployment.apps/polaris restarted
+$ kubectl rollout status deployment/polaris --timeout=300s
+Waiting for deployment "polaris" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment spec update to be observed...
+Waiting for deployment "polaris" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "polaris" rollout to finish: 1 old replicas are pending termination...
+deployment "polaris" successfully rolled out
+$ kubectl get pods
+NAME                      READY   STATUS        RESTARTS   AGE
+polaris-bootstrap-7nk6q   0/1     Completed     0          11m
+polaris-cd7bf79b-bgbvr    1/1     Terminating   0          13m
+polaris-postgresql-0      1/1     Running       0          13m
+vscode-pyspark-123865-0   1/1     Running       0          21m
+$ kubectl exec deployment/polaris -- sh -c 'tr "\0" "\n" < /proc/1/environ | grep AWS_ACCESS_KEY_ID'
+Defaulted container "polaris" out of: polaris, polaris-bootstrap (init)
+error: Internal error occurred: Internal error occurred: error executing command in container: failed to exec in container: failed to start exec "80c97da04c56b40333a70d8db1efa6badf8b9d84401d9d107b3aa303b4885735": OCI runtime exec failed: exec failed: cannot exec in a stopped container
+$ echo AWS_ACCESS_KEY_ID=ASIA***masque***
+AWS_ACCESS_KEY_ID=ASIA***masque***
+$ curl -s http://polaris-mgmt:8182/q/health
+$ head -3
+$ true
+EXIT_CODE=0

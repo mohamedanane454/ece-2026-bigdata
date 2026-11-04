@@ -1,0 +1,53 @@
+===== lab09e - Wed Nov  4 01:22:47 PM UTC 2026 =====
+$ sed -i -E 's/(AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)([= ]).*/\1\2***masque***/' /home/onyxia/work/labkit/logs/lab09c.log
+$ cat /home/onyxia/work/labkit/logs/lab09c-scale.log
+$ kubectl scale deployment/polaris --replicas=0
+deployment.apps/polaris scaled
+$ kubectl scale deployment/polaris --replicas=1
+deployment.apps/polaris scaled
+Waiting for deployment "polaris" rollout to finish: 0 of 1 updated replicas are available...
+deployment "polaris" successfully rolled out
+$ kubectl rollout status deployment/polaris --timeout=300s
+deployment "polaris" successfully rolled out
+$ kubectl get pods
+NAME                      READY   STATUS      RESTARTS   AGE
+polaris-7b8c88859-wrls2   1/1     Running     0          117s
+polaris-bootstrap-7nk6q   0/1     Completed   0          13m
+polaris-postgresql-0      1/1     Running     0          15m
+vscode-pyspark-123865-0   1/1     Running     0          24m
+$ kubectl exec deployment/polaris -c polaris -- sh -c 'tr "\0" "\n" < /proc/1/environ | grep AWS_ACCESS_KEY_ID'
+AWS_ACCESS_KEY_ID=ASIA***masque***
+$ echo AWS_ACCESS_KEY_ID=ASIA***masque***
+AWS_ACCESS_KEY_ID=ASIA***masque***
+$$ seq 1 30
+$ for i in $(seq 1 30)
+$ curl -s http://polaris-mgmt:8182/q/health
+$ grep -q '"UP"'
+$ break
+$ curl -s http://polaris-mgmt:8182/q/health
+$ head -3
+{
+    "status": "UP",
+    "checks": [
+$$ curl -s http://polaris:8181/api/catalog/v1/oauth/tokens -d grant_type=client_credentials -d client_id=root -d client_secret=s3cr3t -d scope=PRINCIPAL_ROLE:ALL
+$$ jq -r .access_token
+$ TOKEN=***jeton-masque***
+$ curl -s http://polaris:8181/api/management/v1/principals -H 'Authorization: Bearer ***jeton-masque***'
+$ jq -c '[.principals[].name]'
+["root","silver_reader_user","dev","analyst"]
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ git status --short
+?? warehouse/silver/orders/data/
+?? warehouse/silver/users/data/
+$ git log --oneline
+9e65e94 feat(spark-lab): add Polaris table metadata
+6bad95e feat(spark-lab): add Iceberg table metadata
+f8bfa12 feat(dbt): exercises - normalized username, birthdate validation, zip ranges
+2977334 feat: medallion pipeline with dbt
+4db43b1 feat: orders report with duckdb
+ac88fa9 chore: ignore csv datasets
+79b8620 feat: dataset generation scripts
+93e283a docs: project introduction and usages
+96d03bc feat: initial project layout
+$ true
+EXIT_CODE=0

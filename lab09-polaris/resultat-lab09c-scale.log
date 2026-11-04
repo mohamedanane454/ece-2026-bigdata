@@ -1,0 +1,6 @@
+$ kubectl scale deployment/polaris --replicas=0
+deployment.apps/polaris scaled
+$ kubectl scale deployment/polaris --replicas=1
+deployment.apps/polaris scaled
+Waiting for deployment "polaris" rollout to finish: 0 of 1 updated replicas are available...
+deployment "polaris" successfully rolled out

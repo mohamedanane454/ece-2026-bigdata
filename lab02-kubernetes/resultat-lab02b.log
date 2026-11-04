@@ -1,0 +1,329 @@
+===== lab02b - Wed Nov  4 12:35:45 PM UTC 2026 =====
+$ kubectl create namespace lab-configmap-secret
+Error from server (Forbidden): namespaces is forbidden: User "system:serviceaccount:user-m-anane-ece:vscode-pyspark-123865" cannot create resource "namespaces" in API group "" at the cluster scope
+$ NS=user-m-anane-ece
+$ mkdir -p /home/onyxia/work/lab-configmap-secret
+$ cd /home/onyxia/work/lab-configmap-secret
+$ cat
+$ kubectl -n user-m-anane-ece create configmap pipeline-config --from-file=pipeline-config.properties
+configmap/pipeline-config created
+$ kubectl -n user-m-anane-ece get configmap pipeline-config
+NAME              DATA   AGE
+pipeline-config   1      0s
+$ kubectl -n user-m-anane-ece describe configmap pipeline-config
+Name:         pipeline-config
+Namespace:    user-m-anane-ece
+Labels:       <none>
+Annotations:  <none>
+
+Data
+====
+pipeline-config.properties:
+----
+# Data Pipeline Configuration
+bronze.path=/mnt/data/bronze
+silver.path=/mnt/data/silver
+gold.path=/mnt/data/gold
+batch.size=1000
+retention.days=90
+log.level=INFO
+spark.cores=4
+kafka.brokers=kafka-0.kafka.svc.cluster.local:9092
+
+
+
+BinaryData
+====
+
+Events:  <none>
+$ kubectl -n user-m-anane-ece get configmap pipeline-config -o yaml
+apiVersion: v1
+data:
+  pipeline-config.properties: |
+    # Data Pipeline Configuration
+    bronze.path=/mnt/data/bronze
+    silver.path=/mnt/data/silver
+    gold.path=/mnt/data/gold
+    batch.size=1000
+    retention.days=90
+    log.level=INFO
+    spark.cores=4
+    kafka.brokers=kafka-0.kafka.svc.cluster.local:9092
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2026-11-04T12:35:45Z"
+  name: pipeline-config
+  namespace: user-m-anane-ece
+  resourceVersion: "38171964"
+  uid: 1e752e8d-d44d-4b4b-ac84-fa286072b46c
+$ kubectl -n user-m-anane-ece create configmap data-paths --from-literal=bronze=/mnt/data/bronze --from-literal=silver=/mnt/data/silver --from-literal=gold=/mnt/data/gold
+configmap/data-paths created
+$ kubectl -n user-m-anane-ece get configmap data-paths -o yaml
+apiVersion: v1
+data:
+  bronze: /mnt/data/bronze
+  gold: /mnt/data/gold
+  silver: /mnt/data/silver
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2026-11-04T12:35:46Z"
+  name: data-paths
+  namespace: user-m-anane-ece
+  resourceVersion: "38171968"
+  uid: 7dfc6503-c1b7-471f-b077-effdee41e2fc
+$ cat
+$ kubectl -n user-m-anane-ece apply -f configmap-data-platform.yaml
+configmap/data-platform-config created
+$ kubectl -n user-m-anane-ece get configmap data-platform-config -o yaml
+apiVersion: v1
+data:
+  application.yaml: |
+    # Data Platform Application Config
+    pipeline:
+      name: bronze-to-silver-etl
+      schedule: "0 2 * * *"
+      timeout_minutes: 120
+    storage:
+      type: s3
+      endpoint: ceph-rgw.ceph-storage.svc.cluster.local:7480
+      region: us-east-1
+    kafka:
+      bootstrap_servers: kafka-0.kafka.svc.cluster.local:9092
+      consumer_group: data-platform-consumers
+      topic_prefix: data.bronze
+  batch_size: "1000"
+  log_level: INFO
+  spark_workers: "4"
+  table_mappings.csv: |
+    source_table,bronze_path,silver_layer
+    customers,/data/bronze/customers,deduplicated_customers
+    orders,/data/bronze/orders,aggregated_orders
+    products,/data/bronze/products,product_catalog
+kind: ConfigMap
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","data":{"application.yaml":"# Data Platform Application Config\npipeline:\n  name: bronze-to-silver-etl\n  schedule: \"0 2 * * *\"\n  timeout_minutes: 120\nstorage:\n  type: s3\n  endpoint: ceph-rgw.ceph-storage.svc.cluster.local:7480\n  region: us-east-1\nkafka:\n  bootstrap_servers: kafka-0.kafka.svc.cluster.local:9092\n  consumer_group: data-platform-consumers\n  topic_prefix: data.bronze\n","batch_size":"1000","log_level":"INFO","spark_workers":"4","table_mappings.csv":"source_table,bronze_path,silver_layer\ncustomers,/data/bronze/customers,deduplicated_customers\norders,/data/bronze/orders,aggregated_orders\nproducts,/data/bronze/products,product_catalog\n"},"kind":"ConfigMap","metadata":{"annotations":{},"name":"data-platform-config","namespace":"user-m-anane-ece"}}
+  creationTimestamp: "2026-11-04T12:35:46Z"
+  name: data-platform-config
+  namespace: user-m-anane-ece
+  resourceVersion: "38171972"
+  uid: 243341bf-ed5f-4eb4-befd-21c57f48dbb7
+$ kubectl -n user-m-anane-ece get configmap data-platform-config -o 'jsonpath={.data.log_level}'
+INFO$ echo
+
+$ kubectl -n user-m-anane-ece get configmap data-platform-config -o 'jsonpath={.data.application\.yaml}'
+# Data Platform Application Config
+pipeline:
+  name: bronze-to-silver-etl
+  schedule: "0 2 * * *"
+  timeout_minutes: 120
+storage:
+  type: s3
+  endpoint: ceph-rgw.ceph-storage.svc.cluster.local:7480
+  region: us-east-1
+kafka:
+  bootstrap_servers: kafka-0.kafka.svc.cluster.local:9092
+  consumer_group: data-platform-consumers
+  topic_prefix: data.bronze
+$ echo
+
+$ kubectl -n user-m-anane-ece create secret generic ceph-credentials --from-literal=access-key=<exemple-access-key> --from-literal=secret-key=<exemple-secret-key>
+secret/ceph-credentials created
+$ kubectl -n user-m-anane-ece get secret ceph-credentials -o yaml
+apiVersion: v1
+data:
+  access-key: <base64-masque>
+  secret-key: <base64-masque>
+kind: Secret
+metadata:
+  creationTimestamp: "2026-11-04T12:35:47Z"
+  name: ceph-credentials
+  namespace: user-m-anane-ece
+  resourceVersion: "38171975"
+  uid: aebc7f62-8452-41fd-a346-24eca4c4e1f4
+type: Opaque
+$ cat
+$ kubectl -n user-m-anane-ece create secret generic s3-credentials --from-file=s3-credentials.txt
+secret/s3-credentials created
+$ kubectl -n user-m-anane-ece get secret s3-credentials -o yaml
+apiVersion: v1
+data:
+  s3-credentials.txt: <base64-masque>
+kind: Secret
+metadata:
+  creationTimestamp: "2026-11-04T12:35:47Z"
+  name: s3-credentials
+  namespace: user-m-anane-ece
+  resourceVersion: "38171978"
+  uid: a25085bb-6cd6-46ef-85d4-4ffe138eb2c5
+type: Opaque
+$ cat
+$ kubectl -n user-m-anane-ece apply -f secret-ceph-credentials.yaml
+secret/ceph-s3-credentials created
+$ kubectl -n user-m-anane-ece get secret ceph-s3-credentials -o yaml
+apiVersion: v1
+data:
+  access-key: <base64-masque>
+  bucket: ZGF0YS1wbGF0Zm9ybS1icm9uemU=
+  endpoint: Y2VwaC1yZ3cuY2VwaC1zdG9yYWdlLnN2Yy5jbHVzdGVyLmxvY2FsOjc0ODA=
+  secret-key: <base64-masque>
+kind: Secret
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Secret","metadata":{"annotations":{},"name":"ceph-s3-credentials","namespace":"user-m-anane-ece"},"stringData":{"access-key":"<exemple-access-key>","bucket":"data-platform-bronze","endpoint":"ceph-rgw.ceph-storage.svc.cluster.local:7480","secret-key":"<exemple-secret-key>"},"type":"Opaque"}
+  creationTimestamp: "2026-11-04T12:35:47Z"
+  name: ceph-s3-credentials
+  namespace: user-m-anane-ece
+  resourceVersion: "38171982"
+  uid: 0639aa8d-605e-4414-9eac-3b8f7338426d
+type: Opaque
+$ kubectl -n user-m-anane-ece get secret ceph-s3-credentials -o 'jsonpath={.data.secret-key}'
+$ base64 -d
+<exemple-secret-key>$ echo
+
+$ kubectl -n user-m-anane-ece get secret ceph-s3-credentials -o json
+$ jq -r '.data | to_entries[] | "\(.key)=\(.value | @base64d)"'
+access-key=<exemple-access-key>
+bucket=data-platform-bronze
+endpoint=ceph-rgw.ceph-storage.svc.cluster.local:7480
+secret-key=<exemple-secret-key>
+$ cat
+$ kubectl -n user-m-anane-ece apply -f pod-with-configmap.yaml
+pod/spark-app created
+$ kubectl -n user-m-anane-ece wait --for=condition=Ready pod/spark-app --timeout=300s
+pod/spark-app condition met
+$ kubectl -n user-m-anane-ece exec spark-app -- env
+$ grep -E 'LOG_LEVEL|SPARK|log_level|spark_workers'
+SPARK_TGZ_URL=https://www.apache.org/dyn/closer.lua/spark/spark-4.2.1/spark-4.2.1-bin-hadoop3.tgz?action=download
+SPARK_TGZ_ASC_URL=https://www.apache.org/dyn/closer.lua/spark/spark-4.2.1/spark-4.2.1-bin-hadoop3.tgz.asc?action=download
+SPARK_HOME=/opt/spark
+log_level=INFO
+spark_workers=4
+LOG_LEVEL=INFO
+SPARK_WORKERS=4
+$ cat
+$ kubectl -n user-m-anane-ece apply -f pod-with-secret.yaml
+pod/ceph-connector created
+$$ seq 1 30
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Pending
+$ '[' Pending = Succeeded -o Pending = Failed ']'
+$ sleep 5
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Pending
+$ '[' Pending = Succeeded -o Pending = Failed ']'
+$ sleep 5
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Pending
+$ '[' Pending = Succeeded -o Pending = Failed ']'
+$ sleep 5
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Pending
+$ '[' Pending = Succeeded -o Pending = Failed ']'
+$ sleep 5
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Pending
+$ '[' Pending = Succeeded -o Pending = Failed ']'
+$ sleep 5
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Pending
+$ '[' Pending = Succeeded -o Pending = Failed ']'
+$ sleep 5
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Pending
+$ '[' Pending = Succeeded -o Pending = Failed ']'
+$ sleep 5
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Running
+$ '[' Running = Succeeded -o Running = Failed ']'
+$ sleep 5
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Running
+$ '[' Running = Succeeded -o Running = Failed ']'
+$ sleep 5
+$ for i in $(seq 1 30)
+$$ kubectl -n user-m-anane-ece get pod ceph-connector -o 'jsonpath={.status.phase}'
+$ p=Succeeded
+$ '[' Succeeded = Succeeded -o Succeeded = Failed ']'
+$ break
+$ kubectl -n user-m-anane-ece get pod ceph-connector
+NAME             READY   STATUS      RESTARTS   AGE
+ceph-connector   0/1     Completed   0          47s
+$ kubectl -n user-m-anane-ece logs ceph-connector
+Access Key: <exemple-access-key>
+$ cat
+$ kubectl -n user-m-anane-ece apply -f pod-with-configmap-volume.yaml
+pod/spark-config-reader created
+$ kubectl -n user-m-anane-ece wait --for=condition=Ready pod/spark-config-reader --timeout=300s
+pod/spark-config-reader condition met
+$ kubectl -n user-m-anane-ece exec spark-config-reader -- ls -la /etc/config/
+total 12
+drwxrwxrwx 3 root root 4096 Nov  4 12:37 .
+drwxr-xr-x 1 root root 4096 Nov  4 12:37 ..
+drwxr-xr-x 2 root root 4096 Nov  4 12:37 ..2026_11_04_12_37_17.3326787370
+lrwxrwxrwx 1 root root   23 Nov  4 12:37 application.yaml -> ..data/application.yaml
+lrwxrwxrwx 1 root root   32 Nov  4 12:37 ..data -> ..2026_11_04_12_37_17.3326787370
+lrwxrwxrwx 1 root root   17 Nov  4 12:37 tables.csv -> ..data/tables.csv
+$ kubectl -n user-m-anane-ece exec spark-config-reader -- cat /etc/config/application.yaml
+# Data Platform Application Config
+pipeline:
+  name: bronze-to-silver-etl
+  schedule: "0 2 * * *"
+  timeout_minutes: 120
+storage:
+  type: s3
+  endpoint: ceph-rgw.ceph-storage.svc.cluster.local:7480
+  region: us-east-1
+kafka:
+  bootstrap_servers: kafka-0.kafka.svc.cluster.local:9092
+  consumer_group: data-platform-consumers
+  topic_prefix: data.bronze
+$ kubectl -n user-m-anane-ece exec spark-config-reader -- cat /etc/config/tables.csv
+source_table,bronze_path,silver_layer
+customers,/data/bronze/customers,deduplicated_customers
+orders,/data/bronze/orders,aggregated_orders
+products,/data/bronze/products,product_catalog
+$ cat
+$ kubectl -n user-m-anane-ece apply -f pod-with-secret-volume.yaml
+pod/ceph-connector-secure created
+$ kubectl -n user-m-anane-ece wait --for=condition=Ready pod/ceph-connector-secure --timeout=300s
+pod/ceph-connector-secure condition met
+$ kubectl -n user-m-anane-ece exec ceph-connector-secure -- cat /etc/ceph-credentials/s3-credentials.txt
+[default]
+aws_access_key_id = <exemple-access-key>
+aws_secret_access_key = <exemple-secret-key>
+$ kubectl -n user-m-anane-ece exec ceph-connector-secure -- ls -la /etc/ceph-credentials/
+total 4
+drwxrwxrwt 3 root root  100 Nov  4 12:37 .
+drwxr-xr-x 1 root root 4096 Nov  4 12:37 ..
+drwxr-xr-x 2 root root   60 Nov  4 12:37 ..2026_11_04_12_37_22.788295030
+lrwxrwxrwx 1 root root   31 Nov  4 12:37 ..data -> ..2026_11_04_12_37_22.788295030
+lrwxrwxrwx 1 root root   25 Nov  4 12:37 s3-credentials.txt -> ..data/s3-credentials.txt
+$ kubectl -n user-m-anane-ece delete pod spark-app ceph-connector spark-config-reader ceph-connector-secure --wait=false
+pod "spark-app" deleted from user-m-anane-ece namespace
+pod "ceph-connector" deleted from user-m-anane-ece namespace
+pod "spark-config-reader" deleted from user-m-anane-ece namespace
+pod "ceph-connector-secure" deleted from user-m-anane-ece namespace
+$ kubectl -n user-m-anane-ece delete configmap pipeline-config data-paths data-platform-config
+configmap "pipeline-config" deleted from user-m-anane-ece namespace
+configmap "data-paths" deleted from user-m-anane-ece namespace
+configmap "data-platform-config" deleted from user-m-anane-ece namespace
+$ kubectl -n user-m-anane-ece delete secret ceph-credentials s3-credentials ceph-s3-credentials
+secret "ceph-credentials" deleted from user-m-anane-ece namespace
+secret "s3-credentials" deleted from user-m-anane-ece namespace
+secret "ceph-s3-credentials" deleted from user-m-anane-ece namespace
+$ cd ..
+$ rm -r lab-configmap-secret
+$ true
+EXIT_CODE=0

@@ -1,0 +1,557 @@
+===== lab09b - Wed Nov  4 01:13:51 PM UTC 2026 =====
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ export POLARIS_URI=http://polaris:8181
+$ POLARIS_URI=http://polaris:8181
+$ export POLARIS_CATALOG=user-m-anane-ece
+$ POLARIS_CATALOG=user-m-anane-ece
+$ export AWS_REGION=us-east-1
+$ AWS_REGION=us-east-1
+$ echo user-m-anane-ece
+user-m-anane-ece
+$ set +x
+POLARIS_DEV_CREDENTIAL=32f7... POLARIS_ANALYST_CREDENTIAL=7482...
+$ spark-submit --master 'local[*]' --driver-memory 1g --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 --conf spark.ui.showConsoleProgress=false /home/onyxia/work/labkit/cells.py /home/onyxia/work/labkit/lab09b.py
+$ grep --line-buffered -vE '^(Ivy|:: |\s+confs|\s+found|\s+org\.|\s+---|\s+\||downloading|\[SUCCESSFUL|resolving|loading settings|Picked up|WARNING: )'
+The jars for the packages stored in: /home/onyxia/.ivy2.5.2/jars
+org.apache.iceberg#iceberg-spark-runtime-4.1_2.13 added as a dependency
+	:: modules in use:
+	0 artifacts copied, 1 already retrieved (0kB/27ms)
+
+>>> [cellule 0]
+... import os, subprocess, json, urllib.request, urllib.parse
+... from pyspark.sql import SparkSession
+... from pyspark.sql import functions as F
+... def sh(cmd):
+...     r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+...     print("$ " + cmd + "\n" + r.stdout + r.stderr)
+... def err(e):
+...     m = str(e).strip().splitlines()
+...     print("ERREUR (attendue) :", type(e).__name__, "-", m[0][:300] if m else "")
+... BUCKET = os.environ["LAB_BUCKET_NAME"]
+... POLARIS_URI = os.environ["POLARIS_URI"]
+... POLARIS_CATALOG = os.environ["POLARIS_CATALOG"]
+... ICEBERG_PACKAGE = "org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0"
+... def make_session(principal, credential=None):
+...     credential = credential or os.environ[f"POLARIS_{principal.upper()}_CREDENTIAL"]
+...     s = (
+...         SparkSession.builder
+...         .appName("lab-polaris")
+...         .master("local[*]")
+...         .config("spark.hadoop.fs.s3a.endpoint", f"https://{os.environ['AWS_S3_ENDPOINT']}")
+...         .config("spark.hadoop.fs.s3a.access.key", os.environ["AWS_ACCESS_KEY_ID"])
+...         .config("spark.hadoop.fs.s3a.secret.key", os.environ["AWS_SECRET_ACCESS_KEY"])
+...         .config("spark.hadoop.fs.s3a.session.token", os.environ.get("AWS_SESSION_TOKEN", ""))
+...         .config("spark.hadoop.fs.s3a.endpoint.region", os.environ.get("AWS_REGION"))
+...         .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider")
+...         .config("spark.hadoop.fs.s3a.path.style.access", "true")
+...         .config("spark.jars.packages", ICEBERG_PACKAGE)
+...         .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+...         .config("spark.sql.catalog.lab", "org.apache.iceberg.spark.SparkCatalog")
+...         .config("spark.sql.catalog.lab.type", "hadoop")
+...         .config("spark.sql.catalog.lab.warehouse", f"s3a://{BUCKET}/warehouse")
+...         .config("spark.sql.catalog.polaris", "org.apache.iceberg.spark.SparkCatalog")
+...         .config("spark.sql.catalog.polaris.type", "rest")
+...         .config("spark.sql.catalog.polaris.uri", f"{POLARIS_URI}/api/catalog")
+...         .config("spark.sql.catalog.polaris.warehouse", POLARIS_CATALOG)
+...         .config("spark.sql.catalog.polaris.credential", credential)
+...         .config("spark.sql.catalog.polaris.scope", "PRINCIPAL_ROLE:ALL")
+...         .config("spark.sql.catalog.polaris.io-impl", "org.apache.iceberg.hadoop.HadoopFileIO")
+...         .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+...         .getOrCreate()
+...     )
+...     s.sparkContext.setLogLevel("ERROR")
+...     print("Polaris principal:", principal)
+...     return s
+... spark = make_session("dev")
+... print(spark.sparkContext.getConf().get("spark.hadoop.fs.s3.impl", None))
+... spark.sql("SHOW NAMESPACES IN lab").show()
+... spark.sql("SHOW NAMESPACES IN polaris").show()
+Polaris principal: dev
+org.apache.hadoop.fs.s3a.S3AFileSystem
++---------+
+|namespace|
++---------+
+|   silver|
++---------+
+
++---------+
+|namespace|
++---------+
++---------+
+
+
+>>> [cellule 1]
+... # Enregistrement de lab.silver.orders dans Polaris (sans copie des donnees)
+... sh(f"aws s3 --profile default ls s3://{BUCKET}/warehouse/silver/orders/ --recursive | wc -l")
+... sh(f"aws s3 --profile default cp s3://{BUCKET}/warehouse/silver/orders/metadata/version-hint.text -")
+... sh(f"aws s3 --profile default ls s3://{BUCKET}/warehouse/silver/orders/metadata/ | grep metadata.json")
+... version = subprocess.run(f"aws s3 --profile default cp s3://{BUCKET}/warehouse/silver/orders/metadata/version-hint.text -", shell=True, capture_output=True, text=True).stdout.strip()
+... print("version courante :", version)
+... spark.sql("CREATE NAMESPACE IF NOT EXISTS polaris.silver")
+... spark.sql(f"""
+...     CALL polaris.system.register_table(
+...       table => 'silver.orders',
+...       metadata_file => 's3a://{BUCKET}/warehouse/silver/orders/metadata/v{version}.metadata.json'
+...     )
+... """).show()
+... spark.sql("SELECT count(*) AS orders FROM polaris.silver.orders").show()
+... spark.sql("SELECT count(*) AS orders FROM lab.silver.orders").show()
+... sh(f"aws s3 --profile default ls s3://{BUCKET}/warehouse/silver/orders/ --recursive | wc -l")
+$ aws s3 --profile default ls s3://user-m-anane-ece/warehouse/silver/orders/ --recursive | wc -l
+18
+
+$ aws s3 --profile default cp s3://user-m-anane-ece/warehouse/silver/orders/metadata/version-hint.text -
+5
+$ aws s3 --profile default ls s3://user-m-anane-ece/warehouse/silver/orders/metadata/ | grep metadata.json
+2026-11-04 13:03:33       1931 v1.metadata.json
+2026-11-04 13:03:55       2997 v2.metadata.json
+2026-11-04 13:04:56       4064 v3.metadata.json
+2026-11-04 13:05:02       4589 v4.metadata.json
+2026-11-04 13:05:04       5656 v5.metadata.json
+
+version courante : 5
++-------------------+-------------------+----------------------+
+|current_snapshot_id|total_records_count|total_data_files_count|
++-------------------+-------------------+----------------------+
+|5785441293415314053|               2834|                     4|
++-------------------+-------------------+----------------------+
+
++------+
+|orders|
++------+
+|  2834|
++------+
+
++------+
+|orders|
++------+
+|  2834|
++------+
+
+$ aws s3 --profile default ls s3://user-m-anane-ece/warehouse/silver/orders/ --recursive | wc -l
+18
+
+
+>>> [cellule 2]
+... spark.sql("SHOW TABLES IN polaris.silver").show()
+... spark.sql("SELECT snapshot_id, operation, committed_at FROM polaris.silver.orders.snapshots").show(truncate=False)
++---------+---------+-----------+
+|namespace|tableName|isTemporary|
++---------+---------+-----------+
+|   silver|   orders|      false|
++---------+---------+-----------+
+
++-------------------+---------+-----------------------+
+|snapshot_id        |operation|committed_at           |
++-------------------+---------+-----------------------+
+|5971824705520254429|overwrite|2026-11-04 13:03:32.922|
+|5530743030737104451|append   |2026-11-04 13:03:54.933|
+|1614423503086333191|append   |2026-11-04 13:04:56.68 |
+|5785441293415314053|append   |2026-11-04 13:05:03.963|
++-------------------+---------+-----------------------+
+
+
+>>> [cellule 3]
+... stg_users = spark.table("lab.silver.users")
+... stg_users.writeTo("polaris.silver.users").createOrReplace()
+... spark.sql("SELECT count(*) AS users FROM polaris.silver.users").show()
+... sh(f"aws s3 --profile default ls s3://{BUCKET}/warehouse/silver/ --recursive | awk '{{print $4}}'")
++-----+
+|users|
++-----+
+|   53|
++-----+
+
+$ aws s3 --profile default ls s3://user-m-anane-ece/warehouse/silver/ --recursive | awk '{print $4}'
+warehouse/silver/
+warehouse/silver/orders/data/00000-127-d0a7b3e1-c214-4383-b533-ffd3b69869f1-0-00001.parquet
+warehouse/silver/orders/data/00000-20-cfe454fa-228e-4f3a-8e72-08465e913dbf-0-00001.parquet
+warehouse/silver/orders/data/00000-43-19316fc3-6a81-4444-a77e-463cc4a7efa3-0-00001.parquet
+warehouse/silver/orders/data/00000-6-4be77fc1-00ed-4fcf-b293-0e2f99efd52e-0-00001.parquet
+warehouse/silver/orders/metadata/661ceae2-4261-4929-8912-3aad37fc6201-m0.avro
+warehouse/silver/orders/metadata/a161b5b0-25ef-4dfe-89be-8850c3dec1ab-m0.avro
+warehouse/silver/orders/metadata/b2bc5c08-f0dc-456d-90a7-8415334d14d3-m0.avro
+warehouse/silver/orders/metadata/d49e13b5-4371-4dd1-9500-5a87c11804dc-m0.avro
+warehouse/silver/orders/metadata/snap-1614423503086333191-1-b2bc5c08-f0dc-456d-90a7-8415334d14d3.avro
+warehouse/silver/orders/metadata/snap-5530743030737104451-1-661ceae2-4261-4929-8912-3aad37fc6201.avro
+warehouse/silver/orders/metadata/snap-5785441293415314053-1-a161b5b0-25ef-4dfe-89be-8850c3dec1ab.avro
+warehouse/silver/orders/metadata/snap-5971824705520254429-1-d49e13b5-4371-4dd1-9500-5a87c11804dc.avro
+warehouse/silver/orders/metadata/v1.metadata.json
+warehouse/silver/orders/metadata/v2.metadata.json
+warehouse/silver/orders/metadata/v3.metadata.json
+warehouse/silver/orders/metadata/v4.metadata.json
+warehouse/silver/orders/metadata/v5.metadata.json
+warehouse/silver/orders/metadata/version-hint.text
+warehouse/silver/users/data/00000-26-f1da5d6f-ba63-4c2c-b314-2e31eb4889fa-0-00001.parquet
+warehouse/silver/users/data/00000-36-3457baf6-4ef2-4182-b78e-72346ae3b384-0-00001.parquet
+warehouse/silver/users/data/00000-39-fae851cc-f83e-4b4b-821a-7462c66fde3f-0-00001.parquet
+warehouse/silver/users/data/00000-5-7a8ad935-2db5-4e30-b6a6-6121e9947a50-0-00001.parquet
+warehouse/silver/users/metadata/00000-c3213d8c-3d78-41d7-809f-f9a16256be28.metadata.json
+warehouse/silver/users/metadata/0983496e-b297-4437-bf85-8e29a1055b35-m0.avro
+warehouse/silver/users/metadata/10e4364a-08cb-40d7-ae28-731b213ecfec-m0.avro
+warehouse/silver/users/metadata/187ec283-1373-4338-b4db-d7e9d4a2f0e6-m0.avro
+warehouse/silver/users/metadata/8df624d2-bde7-4655-bb29-a68b3157166e-m0.avro
+warehouse/silver/users/metadata/snap-2234938568710704734-1-10e4364a-08cb-40d7-ae28-731b213ecfec.avro
+warehouse/silver/users/metadata/snap-4831401298753088140-1-8df624d2-bde7-4655-bb29-a68b3157166e.avro
+warehouse/silver/users/metadata/snap-6009201204227733708-1-187ec283-1373-4338-b4db-d7e9d4a2f0e6.avro
+warehouse/silver/users/metadata/snap-6558679593786463913-1-0983496e-b297-4437-bf85-8e29a1055b35.avro
+warehouse/silver/users/metadata/v1.metadata.json
+warehouse/silver/users/metadata/v2.metadata.json
+warehouse/silver/users/metadata/v3.metadata.json
+warehouse/silver/users/metadata/v4.metadata.json
+warehouse/silver/users/metadata/v5.metadata.json
+warehouse/silver/users/metadata/version-hint.text
+
+
+>>> [cellule 4]
+... spark.sql("ALTER TABLE polaris.silver.users ADD COLUMN country STRING")
+... spark.sql("DESCRIBE polaris.silver.users").show()
+... spark.sql("SELECT timestamp, file FROM polaris.silver.users.metadata_log_entries").show(truncate=False)
++---------+---------+-------+
+| col_name|data_type|comment|
++---------+---------+-------+
+|  user_id|   string|   NULL|
+| username|   string|   NULL|
+|     name|   string|   NULL|
+|      sex|   string|   NULL|
+|    email|   string|   NULL|
+|birthdate|     date|   NULL|
+|   street|   string|   NULL|
+|     city|   string|   NULL|
+|    state|   string|   NULL|
+| zip_code|   string|   NULL|
+|  country|   string|   NULL|
++---------+---------+-------+
+
++-----------------------+--------------------------------------------------------------------------------------------------------------+
+|timestamp              |file                                                                                                          |
++-----------------------+--------------------------------------------------------------------------------------------------------------+
+|2026-11-04 13:14:55.271|s3://user-m-anane-ece/warehouse/silver/users/metadata/00000-c3213d8c-3d78-41d7-809f-f9a16256be28.metadata.json|
+|2026-11-04 13:15:00.535|s3://user-m-anane-ece/warehouse/silver/users/metadata/00001-d5c2c168-32eb-4a31-8247-19cfbb64f399.metadata.json|
++-----------------------+--------------------------------------------------------------------------------------------------------------+
+
+
+>>> [cellule 5]
+... # Lecture en tant qu'analyst (nouvelle session Spark = redemarrage du kernel)
+... spark.stop()
+... spark = make_session("analyst")
+... spark.sql("SHOW TABLES IN polaris.silver").show()
+... spark.sql("SELECT product, count(*) FROM polaris.silver.orders GROUP BY product").show()
+Polaris principal: analyst
++---------+---------+-----------+
+|namespace|tableName|isTemporary|
++---------+---------+-----------+
+|   silver|   orders|      false|
+|   silver|    users|      false|
++---------+---------+-----------+
+
++---------+--------+
+|  product|count(1)|
++---------+--------+
+|    donut|     462|
+|   cookie|     470|
+|croissant|     491|
+|    bread|     459|
+|  brioche|     468|
+|    drink|     484|
++---------+--------+
+
+
+>>> [cellule 6]
+... try:
+...     spark.sql("INSERT INTO polaris.silver.orders SELECT * FROM polaris.silver.orders LIMIT 1")
+... except Exception as e:
+...     err(e)
+13:15:07.057 [Thread-5] ERROR org.apache.spark.sql.execution.datasources.v2.AppendDataExec - Data source write support IcebergBatchWrite(table=polaris.silver.orders, format=PARQUET) is aborting.
+13:15:07.139 [Thread-5] ERROR org.apache.spark.sql.execution.datasources.v2.AppendDataExec - Data source write support IcebergBatchWrite(table=polaris.silver.orders, format=PARQUET) aborted.
+ERREUR (attendue) : Py4JJavaError - An error occurred while calling o335.sql.
+
+>>> [cellule 7]
+... try:
+...     spark.sql("ALTER TABLE polaris.silver.users ADD COLUMN phone STRING")
+... except Exception as e:
+...     err(e)
+ERREUR (attendue) : Py4JJavaError - An error occurred while calling o335.sql.
+
+>>> [cellule 8]
+... # Retour a dev : le INSERT refuse a-t-il cree un snapshot ?
+... spark.stop()
+... spark = make_session("dev")
+... spark.sql("SELECT snapshot_id, operation, committed_at FROM polaris.silver.orders.snapshots ORDER BY committed_at").show(truncate=False)
+... spark.stop()
+Polaris principal: dev
++-------------------+---------+-----------------------+
+|snapshot_id        |operation|committed_at           |
++-------------------+---------+-----------------------+
+|5971824705520254429|overwrite|2026-11-04 13:03:32.922|
+|5530743030737104451|append   |2026-11-04 13:03:54.933|
+|1614423503086333191|append   |2026-11-04 13:04:56.68 |
+|5785441293415314053|append   |2026-11-04 13:05:03.963|
++-------------------+---------+-----------------------+
+
+$ aws s3 --profile default sync s3://user-m-anane-ece/warehouse/ ./warehouse/
+Completed 2.1 KiB/~41.5 KiB (12.0 KiB/s) with ~9 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/silver/orders/data/00000-20-cfe454fa-228e-4f3a-8e72-08465e913dbf-0-00001.parquet to warehouse/silver/orders/data/00000-20-cfe454fa-228e-4f3a-8e72-08465e913dbf-0-00001.parquet
+Completed 2.1 KiB/~44.6 KiB (12.0 KiB/s) with ~9 file(s) remaining (calculating...)Completed 5.6 KiB/~48.1 KiB (22.9 KiB/s) with ~10 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/silver/users/data/00000-36-3457baf6-4ef2-4182-b78e-72346ae3b384-0-00001.parquet to warehouse/silver/users/data/00000-36-3457baf6-4ef2-4182-b78e-72346ae3b384-0-00001.parquet
+Completed 5.6 KiB/~83.6 KiB (22.9 KiB/s) with ~15 file(s) remaining (calculating...)Completed 13.3 KiB/~109.0 KiB (39.0 KiB/s) with ~21 file(s) remaining (calculating...)Completed 15.3 KiB/114.1 KiB (44.3 KiB/s) with 22 file(s) remaining                   download: s3://user-m-anane-ece/warehouse/silver/users/data/00000-5-7a8ad935-2db5-4e30-b6a6-6121e9947a50-0-00001.parquet to warehouse/silver/users/data/00000-5-7a8ad935-2db5-4e30-b6a6-6121e9947a50-0-00001.parquet
+Completed 15.3 KiB/114.1 KiB (44.3 KiB/s) with 21 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/data/00000-6-4be77fc1-00ed-4fcf-b293-0e2f99efd52e-0-00001.parquet to warehouse/silver/orders/data/00000-6-4be77fc1-00ed-4fcf-b293-0e2f99efd52e-0-00001.parquet
+Completed 15.3 KiB/114.1 KiB (44.3 KiB/s) with 20 file(s) remainingCompleted 17.4 KiB/114.1 KiB (46.0 KiB/s) with 20 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/00000-c3213d8c-3d78-41d7-809f-f9a16256be28.metadata.json to warehouse/silver/users/metadata/00000-c3213d8c-3d78-41d7-809f-f9a16256be28.metadata.json
+Completed 17.4 KiB/114.1 KiB (46.0 KiB/s) with 19 file(s) remainingCompleted 24.6 KiB/114.1 KiB (62.1 KiB/s) with 19 file(s) remainingCompleted 32.2 KiB/114.1 KiB (78.0 KiB/s) with 19 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/a161b5b0-25ef-4dfe-89be-8850c3dec1ab-m0.avro to warehouse/silver/orders/metadata/a161b5b0-25ef-4dfe-89be-8850c3dec1ab-m0.avro
+Completed 32.2 KiB/114.1 KiB (78.0 KiB/s) with 18 file(s) remainingCompleted 35.2 KiB/114.1 KiB (81.7 KiB/s) with 18 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/0983496e-b297-4437-bf85-8e29a1055b35-m0.avro to warehouse/silver/users/metadata/0983496e-b297-4437-bf85-8e29a1055b35-m0.avro
+Completed 35.2 KiB/114.1 KiB (81.7 KiB/s) with 17 file(s) remainingCompleted 42.7 KiB/114.1 KiB (94.9 KiB/s) with 17 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/00001-d5c2c168-32eb-4a31-8247-19cfbb64f399.metadata.json to warehouse/silver/users/metadata/00001-d5c2c168-32eb-4a31-8247-19cfbb64f399.metadata.json
+Completed 42.7 KiB/114.1 KiB (94.9 KiB/s) with 16 file(s) remainingCompleted 50.3 KiB/114.1 KiB (107.1 KiB/s) with 16 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/187ec283-1373-4338-b4db-d7e9d4a2f0e6-m0.avro to warehouse/silver/users/metadata/187ec283-1373-4338-b4db-d7e9d4a2f0e6-m0.avro
+Completed 50.3 KiB/114.1 KiB (107.1 KiB/s) with 15 file(s) remainingCompleted 54.6 KiB/114.1 KiB (111.0 KiB/s) with 15 file(s) remainingCompleted 59.1 KiB/114.1 KiB (119.5 KiB/s) with 15 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/8df624d2-bde7-4655-bb29-a68b3157166e-m0.avro to warehouse/silver/users/metadata/8df624d2-bde7-4655-bb29-a68b3157166e-m0.avro
+Completed 59.1 KiB/114.1 KiB (119.5 KiB/s) with 14 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/snap-6009201204227733708-1-187ec283-1373-4338-b4db-d7e9d4a2f0e6.avro to warehouse/silver/users/metadata/snap-6009201204227733708-1-187ec283-1373-4338-b4db-d7e9d4a2f0e6.avro
+Completed 59.1 KiB/114.1 KiB (119.5 KiB/s) with 13 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/snap-4831401298753088140-1-8df624d2-bde7-4655-bb29-a68b3157166e.avro to warehouse/silver/users/metadata/snap-4831401298753088140-1-8df624d2-bde7-4655-bb29-a68b3157166e.avro
+Completed 59.1 KiB/114.1 KiB (119.5 KiB/s) with 12 file(s) remainingCompleted 64.1 KiB/114.1 KiB (114.5 KiB/s) with 12 file(s) remainingCompleted 68.5 KiB/114.1 KiB (121.1 KiB/s) with 12 file(s) remainingCompleted 75.7 KiB/114.1 KiB (133.5 KiB/s) with 12 file(s) remainingCompleted 78.9 KiB/114.1 KiB (138.2 KiB/s) with 12 file(s) remainingCompleted 83.4 KiB/114.1 KiB (145.2 KiB/s) with 12 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/v4.metadata.json to warehouse/silver/users/metadata/v4.metadata.json
+Completed 83.4 KiB/114.1 KiB (145.2 KiB/s) with 11 file(s) remainingCompleted 87.8 KiB/114.1 KiB (148.5 KiB/s) with 11 file(s) remainingCompleted 93.4 KiB/114.1 KiB (157.0 KiB/s) with 11 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/v4.metadata.json to warehouse/silver/orders/metadata/v4.metadata.json
+Completed 93.4 KiB/114.1 KiB (157.0 KiB/s) with 10 file(s) remainingCompleted 96.5 KiB/114.1 KiB (159.5 KiB/s) with 10 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/snap-1614423503086333191-1-b2bc5c08-f0dc-456d-90a7-8415334d14d3.avro to warehouse/silver/orders/metadata/snap-1614423503086333191-1-b2bc5c08-f0dc-456d-90a7-8415334d14d3.avro
+Completed 96.5 KiB/114.1 KiB (159.5 KiB/s) with 9 file(s) remainingCompleted 101.0 KiB/114.1 KiB (166.4 KiB/s) with 9 file(s) remainingCompleted 106.2 KiB/114.1 KiB (173.9 KiB/s) with 9 file(s) remainingCompleted 110.1 KiB/114.1 KiB (180.2 KiB/s) with 9 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/v2.metadata.json to warehouse/silver/users/metadata/v2.metadata.json
+Completed 110.1 KiB/114.1 KiB (180.2 KiB/s) with 8 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/data/00000-26-f1da5d6f-ba63-4c2c-b314-2e31eb4889fa-0-00001.parquet to warehouse/silver/users/data/00000-26-f1da5d6f-ba63-4c2c-b314-2e31eb4889fa-0-00001.parquet
+Completed 110.1 KiB/114.1 KiB (180.2 KiB/s) with 7 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/snap-6558679593786463913-1-0983496e-b297-4437-bf85-8e29a1055b35.avro to warehouse/silver/users/metadata/snap-6558679593786463913-1-0983496e-b297-4437-bf85-8e29a1055b35.avro
+Completed 110.1 KiB/114.1 KiB (180.2 KiB/s) with 6 file(s) remainingCompleted 114.1 KiB/114.1 KiB (180.6 KiB/s) with 6 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/b2bc5c08-f0dc-456d-90a7-8415334d14d3-m0.avro to warehouse/silver/orders/metadata/b2bc5c08-f0dc-456d-90a7-8415334d14d3-m0.avro
+Completed 114.1 KiB/114.1 KiB (180.6 KiB/s) with 5 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/v3.metadata.json to warehouse/silver/orders/metadata/v3.metadata.json
+Completed 114.1 KiB/114.1 KiB (180.6 KiB/s) with 4 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/snap-5785441293415314053-1-a161b5b0-25ef-4dfe-89be-8850c3dec1ab.avro to warehouse/silver/orders/metadata/snap-5785441293415314053-1-a161b5b0-25ef-4dfe-89be-8850c3dec1ab.avro
+Completed 114.1 KiB/114.1 KiB (180.6 KiB/s) with 3 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/orders/metadata/v5.metadata.json to warehouse/silver/orders/metadata/v5.metadata.json
+Completed 114.1 KiB/114.1 KiB (180.6 KiB/s) with 2 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/v5.metadata.json to warehouse/silver/users/metadata/v5.metadata.json
+Completed 114.1 KiB/114.1 KiB (180.6 KiB/s) with 1 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/silver/users/metadata/v3.metadata.json to warehouse/silver/users/metadata/v3.metadata.json
+$ git status --short
+$ head -30
+?? warehouse/silver/orders/data/
+?? warehouse/silver/orders/metadata/a161b5b0-25ef-4dfe-89be-8850c3dec1ab-m0.avro
+?? warehouse/silver/orders/metadata/b2bc5c08-f0dc-456d-90a7-8415334d14d3-m0.avro
+?? warehouse/silver/orders/metadata/snap-1614423503086333191-1-b2bc5c08-f0dc-456d-90a7-8415334d14d3.avro
+?? warehouse/silver/orders/metadata/snap-5785441293415314053-1-a161b5b0-25ef-4dfe-89be-8850c3dec1ab.avro
+?? warehouse/silver/orders/metadata/v3.metadata.json
+?? warehouse/silver/orders/metadata/v4.metadata.json
+?? warehouse/silver/orders/metadata/v5.metadata.json
+?? warehouse/silver/users/data/
+?? warehouse/silver/users/metadata/00000-c3213d8c-3d78-41d7-809f-f9a16256be28.metadata.json
+?? warehouse/silver/users/metadata/00001-d5c2c168-32eb-4a31-8247-19cfbb64f399.metadata.json
+?? warehouse/silver/users/metadata/0983496e-b297-4437-bf85-8e29a1055b35-m0.avro
+?? warehouse/silver/users/metadata/187ec283-1373-4338-b4db-d7e9d4a2f0e6-m0.avro
+?? warehouse/silver/users/metadata/8df624d2-bde7-4655-bb29-a68b3157166e-m0.avro
+?? warehouse/silver/users/metadata/snap-4831401298753088140-1-8df624d2-bde7-4655-bb29-a68b3157166e.avro
+?? warehouse/silver/users/metadata/snap-6009201204227733708-1-187ec283-1373-4338-b4db-d7e9d4a2f0e6.avro
+?? warehouse/silver/users/metadata/snap-6558679593786463913-1-0983496e-b297-4437-bf85-8e29a1055b35.avro
+?? warehouse/silver/users/metadata/v2.metadata.json
+?? warehouse/silver/users/metadata/v3.metadata.json
+?? warehouse/silver/users/metadata/v4.metadata.json
+?? warehouse/silver/users/metadata/v5.metadata.json
+$ git add ./warehouse/silver/orders/metadata ./warehouse/silver/users/metadata
+$ git commit -m 'feat(spark-lab): add Polaris table metadata'
+[main 9e65e94] feat(spark-lab): add Polaris table metadata
+ 19 files changed, 9 insertions(+)
+ create mode 100644 warehouse/silver/orders/metadata/a161b5b0-25ef-4dfe-89be-8850c3dec1ab-m0.avro
+ create mode 100644 warehouse/silver/orders/metadata/b2bc5c08-f0dc-456d-90a7-8415334d14d3-m0.avro
+ create mode 100644 warehouse/silver/orders/metadata/snap-1614423503086333191-1-b2bc5c08-f0dc-456d-90a7-8415334d14d3.avro
+ create mode 100644 warehouse/silver/orders/metadata/snap-5785441293415314053-1-a161b5b0-25ef-4dfe-89be-8850c3dec1ab.avro
+ create mode 100644 warehouse/silver/orders/metadata/v3.metadata.json
+ create mode 100644 warehouse/silver/orders/metadata/v4.metadata.json
+ create mode 100644 warehouse/silver/orders/metadata/v5.metadata.json
+ create mode 100644 warehouse/silver/users/metadata/00000-c3213d8c-3d78-41d7-809f-f9a16256be28.metadata.json
+ create mode 100644 warehouse/silver/users/metadata/00001-d5c2c168-32eb-4a31-8247-19cfbb64f399.metadata.json
+ create mode 100644 warehouse/silver/users/metadata/0983496e-b297-4437-bf85-8e29a1055b35-m0.avro
+ create mode 100644 warehouse/silver/users/metadata/187ec283-1373-4338-b4db-d7e9d4a2f0e6-m0.avro
+ create mode 100644 warehouse/silver/users/metadata/8df624d2-bde7-4655-bb29-a68b3157166e-m0.avro
+ create mode 100644 warehouse/silver/users/metadata/snap-4831401298753088140-1-8df624d2-bde7-4655-bb29-a68b3157166e.avro
+ create mode 100644 warehouse/silver/users/metadata/snap-6009201204227733708-1-187ec283-1373-4338-b4db-d7e9d4a2f0e6.avro
+ create mode 100644 warehouse/silver/users/metadata/snap-6558679593786463913-1-0983496e-b297-4437-bf85-8e29a1055b35.avro
+ create mode 100644 warehouse/silver/users/metadata/v2.metadata.json
+ create mode 100644 warehouse/silver/users/metadata/v3.metadata.json
+ create mode 100644 warehouse/silver/users/metadata/v4.metadata.json
+ create mode 100644 warehouse/silver/users/metadata/v5.metadata.json
+$ gpush
+$ echo '[git push differe : il sera fait a la fin, avec l'\''authentification GitHub de l'\''utilisateur]'
+[git push differe : il sera fait a la fin, avec l'authentification GitHub de l'utilisateur]
+$ spark-submit --master 'local[*]' --driver-memory 1g --packages org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0 --conf spark.ui.showConsoleProgress=false /home/onyxia/work/labkit/cells.py /home/onyxia/work/labkit/lab09x.py
+$ grep --line-buffered -vE '^(Ivy|:: |\s+confs|\s+found|\s+org\.|\s+---|\s+\||downloading|\[SUCCESSFUL|resolving|loading settings|Picked up|WARNING: )'
+The jars for the packages stored in: /home/onyxia/.ivy2.5.2/jars
+org.apache.iceberg#iceberg-spark-runtime-4.1_2.13 added as a dependency
+	:: modules in use:
+	0 artifacts copied, 1 already retrieved (0kB/10ms)
+
+>>> [cellule 0]
+... import os, subprocess, json, urllib.request, urllib.parse
+... from pyspark.sql import SparkSession
+... from pyspark.sql import functions as F
+... def sh(cmd):
+...     r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+...     print("$ " + cmd + "\n" + r.stdout + r.stderr)
+... def err(e):
+...     m = str(e).strip().splitlines()
+...     print("ERREUR (attendue) :", type(e).__name__, "-", m[0][:300] if m else "")
+... BUCKET = os.environ["LAB_BUCKET_NAME"]
+... POLARIS_URI = os.environ["POLARIS_URI"]
+... POLARIS_CATALOG = os.environ["POLARIS_CATALOG"]
+... ICEBERG_PACKAGE = "org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0"
+... def make_session(principal, credential=None):
+...     credential = credential or os.environ[f"POLARIS_{principal.upper()}_CREDENTIAL"]
+...     s = (
+...         SparkSession.builder
+...         .appName("lab-polaris")
+...         .master("local[*]")
+...         .config("spark.hadoop.fs.s3a.endpoint", f"https://{os.environ['AWS_S3_ENDPOINT']}")
+...         .config("spark.hadoop.fs.s3a.access.key", os.environ["AWS_ACCESS_KEY_ID"])
+...         .config("spark.hadoop.fs.s3a.secret.key", os.environ["AWS_SECRET_ACCESS_KEY"])
+...         .config("spark.hadoop.fs.s3a.session.token", os.environ.get("AWS_SESSION_TOKEN", ""))
+...         .config("spark.hadoop.fs.s3a.endpoint.region", os.environ.get("AWS_REGION"))
+...         .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider")
+...         .config("spark.hadoop.fs.s3a.path.style.access", "true")
+...         .config("spark.jars.packages", ICEBERG_PACKAGE)
+...         .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+...         .config("spark.sql.catalog.lab", "org.apache.iceberg.spark.SparkCatalog")
+...         .config("spark.sql.catalog.lab.type", "hadoop")
+...         .config("spark.sql.catalog.lab.warehouse", f"s3a://{BUCKET}/warehouse")
+...         .config("spark.sql.catalog.polaris", "org.apache.iceberg.spark.SparkCatalog")
+...         .config("spark.sql.catalog.polaris.type", "rest")
+...         .config("spark.sql.catalog.polaris.uri", f"{POLARIS_URI}/api/catalog")
+...         .config("spark.sql.catalog.polaris.warehouse", POLARIS_CATALOG)
+...         .config("spark.sql.catalog.polaris.credential", credential)
+...         .config("spark.sql.catalog.polaris.scope", "PRINCIPAL_ROLE:ALL")
+...         .config("spark.sql.catalog.polaris.io-impl", "org.apache.iceberg.hadoop.HadoopFileIO")
+...         .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+...         .getOrCreate()
+...     )
+...     s.sparkContext.setLogLevel("ERROR")
+...     print("Polaris principal:", principal)
+...     return s
+... spark = make_session("dev")
+... # Exercice 1 : suppression de la colonne country
+... spark.sql("SELECT snapshot_id, operation FROM polaris.silver.users.snapshots").show(truncate=False)
+... spark.sql("ALTER TABLE polaris.silver.users DROP COLUMN country")
+... spark.sql("DESCRIBE polaris.silver.users").show()
+... spark.sql("SELECT snapshot_id, operation FROM polaris.silver.users.snapshots").show(truncate=False)
+... spark.sql("SELECT timestamp, file FROM polaris.silver.users.metadata_log_entries").show(truncate=False)
+Polaris principal: dev
++-------------------+---------+
+|snapshot_id        |operation|
++-------------------+---------+
+|6009201204227733708|overwrite|
++-------------------+---------+
+
++---------+---------+-------+
+| col_name|data_type|comment|
++---------+---------+-------+
+|  user_id|   string|   NULL|
+| username|   string|   NULL|
+|     name|   string|   NULL|
+|      sex|   string|   NULL|
+|    email|   string|   NULL|
+|birthdate|     date|   NULL|
+|   street|   string|   NULL|
+|     city|   string|   NULL|
+|    state|   string|   NULL|
+| zip_code|   string|   NULL|
++---------+---------+-------+
+
++-------------------+---------+
+|snapshot_id        |operation|
++-------------------+---------+
+|6009201204227733708|overwrite|
++-------------------+---------+
+
++-----------------------+--------------------------------------------------------------------------------------------------------------+
+|timestamp              |file                                                                                                          |
++-----------------------+--------------------------------------------------------------------------------------------------------------+
+|2026-11-04 13:14:55.271|s3://user-m-anane-ece/warehouse/silver/users/metadata/00000-c3213d8c-3d78-41d7-809f-f9a16256be28.metadata.json|
+|2026-11-04 13:15:00.535|s3://user-m-anane-ece/warehouse/silver/users/metadata/00001-d5c2c168-32eb-4a31-8247-19cfbb64f399.metadata.json|
+|2026-11-04 13:15:39.133|s3://user-m-anane-ece/warehouse/silver/users/metadata/00002-87204e14-4497-4a55-8b12-f91843d1875e.metadata.json|
++-----------------------+--------------------------------------------------------------------------------------------------------------+
+
+
+>>> [cellule 1]
+... # Exercice 2 : role silver_reader limite au namespace silver
+... spark.sql("CREATE NAMESPACE IF NOT EXISTS polaris.gold")
+... spark.sql("CREATE OR REPLACE TABLE polaris.gold.sales_by_product AS SELECT product, sum(quantity) AS quantity FROM polaris.silver.orders GROUP BY product")
+... spark.sql("SELECT * FROM polaris.gold.sales_by_product").show()
+... API = POLARIS_URI + "/api/management/v1"
+... tok = json.load(urllib.request.urlopen(POLARIS_URI + "/api/catalog/v1/oauth/tokens", data=urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": "root", "client_secret": "s3cr3t", "scope": "PRINCIPAL_ROLE:ALL"}).encode()))["access_token"]
+... def call(method, path, body=None):
+...     req = urllib.request.Request(API + path, method=method, data=json.dumps(body).encode() if body is not None else None, headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"})
+...     try:
+...         r = urllib.request.urlopen(req)
+...         txt = r.read().decode()
+...         print(method, path, "->", r.status)
+...         return json.loads(txt) if txt else None
+...     except urllib.error.HTTPError as e:
+...         print(method, path, "->", e.code, e.read().decode()[:200])
+...         return None
+... cat = POLARIS_CATALOG
+... call("POST", f"/catalogs/{cat}/catalog-roles", {"catalogRole": {"name": "silver_reader"}})
+... call("PUT", f"/catalogs/{cat}/catalog-roles/silver_reader/grants", {"grant": {"type": "catalog", "privilege": "CATALOG_READ_PROPERTIES"}})
+... for p in ["NAMESPACE_READ_PROPERTIES", "TABLE_LIST", "TABLE_READ_PROPERTIES", "TABLE_READ_DATA"]:
+...     call("PUT", f"/catalogs/{cat}/catalog-roles/silver_reader/grants", {"grant": {"type": "namespace", "namespace": ["silver"], "privilege": p}})
+... print(json.dumps(call("GET", f"/catalogs/{cat}/catalog-roles/silver_reader/grants")))
+... created = call("POST", "/principals", {"principal": {"name": "silver_reader_user"}})
+... if created is None:
+...     created = call("POST", "/principals/silver_reader_user/rotate")
+... reader_cred = created["credentials"]["clientId"] + ":" + created["credentials"]["clientSecret"]
+... call("POST", "/principal-roles", {"principalRole": {"name": "silver_consumer"}})
+... call("PUT", "/principals/silver_reader_user/principal-roles", {"principalRole": {"name": "silver_consumer"}})
+... call("PUT", f"/principal-roles/silver_consumer/catalog-roles/{cat}", {"catalogRole": {"name": "silver_reader"}})
++---------+--------+
+|  product|quantity|
++---------+--------+
+|    donut|    1390|
+|   cookie|    1373|
+|croissant|    1523|
+|    bread|    1425|
+|  brioche|    1424|
+|    drink|    1493|
++---------+--------+
+
+POST /catalogs/user-m-anane-ece/catalog-roles -> 201
+PUT /catalogs/user-m-anane-ece/catalog-roles/silver_reader/grants -> 201
+PUT /catalogs/user-m-anane-ece/catalog-roles/silver_reader/grants -> 201
+PUT /catalogs/user-m-anane-ece/catalog-roles/silver_reader/grants -> 201
+PUT /catalogs/user-m-anane-ece/catalog-roles/silver_reader/grants -> 201
+PUT /catalogs/user-m-anane-ece/catalog-roles/silver_reader/grants -> 201
+GET /catalogs/user-m-anane-ece/catalog-roles/silver_reader/grants -> 200
+{"grants": [{"privilege": "CATALOG_READ_PROPERTIES", "type": "catalog"}, {"namespace": ["silver"], "privilege": "NAMESPACE_READ_PROPERTIES", "type": "namespace"}, {"namespace": ["silver"], "privilege": "TABLE_LIST", "type": "namespace"}, {"namespace": ["silver"], "privilege": "TABLE_READ_PROPERTIES", "type": "namespace"}, {"namespace": ["silver"], "privilege": "TABLE_READ_DATA", "type": "namespace"}]}
+POST /principals -> 201
+POST /principal-roles -> 201
+PUT /principals/silver_reader_user/principal-roles -> 201
+PUT /principal-roles/silver_consumer/catalog-roles/user-m-anane-ece -> 201
+
+>>> [cellule 2]
+... spark.stop()
+... spark = make_session("silver_reader_user", reader_cred)
+... spark.sql("SELECT count(*) AS silver_orders FROM polaris.silver.orders").show()
+... try:
+...     spark.sql("SELECT * FROM polaris.gold.sales_by_product").show()
+... except Exception as e:
+...     err(e)
+Polaris principal: silver_reader_user
++-------------+
+|silver_orders|
++-------------+
+|         2834|
++-------------+
+
+ERREUR (attendue) : Py4JJavaError - An error occurred while calling o197.sql.
+
+>>> [cellule 3]
+... # Cleanup en tant que dev
+... spark.stop()
+... spark = make_session("dev")
+... spark.sql("DROP TABLE IF EXISTS polaris.gold.sales_by_product")
+... spark.sql("DROP TABLE IF EXISTS polaris.silver.users")
+... spark.sql("DROP NAMESPACE IF EXISTS polaris.gold")
+... spark.sql("SHOW NAMESPACES IN polaris").show()
+... spark.sql("SHOW TABLES IN polaris.silver").show()
+... spark.stop()
+Polaris principal: dev
++---------+
+|namespace|
++---------+
+|   silver|
++---------+
+
++---------+---------+-----------+
+|namespace|tableName|isTemporary|
++---------+---------+-----------+
+|   silver|   orders|      false|
++---------+---------+-----------+
+
+$ true
+EXIT_CODE=0
