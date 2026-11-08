@@ -5,5 +5,7 @@ export PATH="$HOME/.local/bin:$PATH"
 export S3_ENDPOINT_URL=$(aws configure get endpoint_url --profile default || echo "https://$AWS_S3_ENDPOINT")
 export REPO=/home/onyxia/work/$GIT_REPO_NAME
 export GIT_TERMINAL_PROMPT=0
+# Identifiants S3 a jour : ceux du profil default (renouveles), pas ceux du demarrage du service
+eval "$(aws configure export-credentials --profile default --format env 2>/dev/null)"
 gpush() { echo "[git push differe : il sera fait a la fin, avec l'authentification GitHub de l'utilisateur]"; }
 export -f gpush

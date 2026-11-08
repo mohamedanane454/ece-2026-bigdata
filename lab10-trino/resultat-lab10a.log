@@ -1,0 +1,88 @@
+===== lab10a - Sun Nov  8 08:37:17 PM UTC 2026 =====
+$ kubectl get pod vscode-pyspark-123865-0 -o 'jsonpath={.spec.containers[0].resources}'
+{"limits":{"cpu":"2","memory":"2000Mi"},"requests":{"cpu":"200m","memory":"400Mi"}}$ echo
+
+$ kubectl describe quota
+$ tail -7
+--------          ----    ----
+count/pods        4       8
+limits.cpu        2750m   4
+limits.memory     2768Mi  4Gi
+requests.cpu      350m    1
+requests.memory   784Mi   1Gi
+requests.storage  11Gi    20Gi
+$ mkdir -p /home/onyxia/work/trino-lab
+$ cd /home/onyxia/work/trino-lab
+$ mkdir -p trino/deployment
+$ cat
+$ cat
+$ find trino -type f
+trino/deployment/values.yaml
+trino/deployment/Chart.yaml
+$ export POLARIS_URI=http://polaris:8181
+$ POLARIS_URI=http://polaris:8181
+$ export POLARIS_MGMT_URI=http://polaris-mgmt:8182
+$ POLARIS_MGMT_URI=http://polaris-mgmt:8182
+$ export POLARIS_CATALOG=user-m-anane-ece
+$ POLARIS_CATALOG=user-m-anane-ece
+$ export API=http://polaris:8181/api/management/v1
+$ API=http://polaris:8181/api/management/v1
+$ echo user-m-anane-ece
+user-m-anane-ece
+$ aws s3 --profile default ls s3://user-m-anane-ece/bronze/
+2026-11-04 12:47:31     331568 orders.csv
+2026-11-04 12:47:25       7351 users.csv
+$ set +x
+fichier de credentials Polaris present
+POLARIS_DEV_CREDENTIAL=32f7...(masque)
+secret/trino-polaris-oauth created
+secret/polaris-s3 unchanged
+$ kubectl create configmap trino-polaris-config --from-literal=POLARIS_CATALOG=user-m-anane-ece --dry-run=client -o yaml
+$ kubectl apply -f -
+configmap/trino-polaris-config created
+$ helm repo add trino https://trinodb.github.io/charts
+"trino" has been added to your repositories
+$ helm repo update
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "trino" chart repository
+Update Complete. ⎈Happy Helming!⎈
+$ helm dependency update ./trino/deployment
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "trino" chart repository
+Update Complete. ⎈Happy Helming!⎈
+Saving 1 charts
+Downloading trino from repo https://trinodb.github.io/charts
+Deleting outdated charts
+$ helm upgrade --install trino ./trino/deployment --wait --timeout 10m
+Release "trino" does not exist. Installing it now.
+NAME: trino
+LAST DEPLOYED: Sun Nov  8 20:37:22 2026
+NAMESPACE: user-m-anane-ece
+STATUS: deployed
+REVISION: 1
+$ kubectl get pods
+NAME                                 READY   STATUS      RESTARTS   AGE
+polaris-7b8c88859-xch8m              1/1     Running     0          3m
+polaris-bootstrap-7nk6q              0/1     Completed   0          4d7h
+polaris-postgresql-0                 1/1     Running     0          4d7h
+trino-coordinator-797c6668d8-4z85z   1/1     Running     0          70s
+vscode-pyspark-123865-0              1/1     Running     0          39m
+$ helm list
+NAME                 	NAMESPACE       	REVISION	UPDATED                                	STATUS  	CHART               	APP VERSION
+polaris              	user-m-anane-ece	1       	2026-11-04 13:06:48.067231647 +0000 UTC	deployed	polaris-1.8.0       	           
+trino                	user-m-anane-ece	1       	2026-11-08 20:37:22.229010693 +0000 UTC	deployed	trino-1.45.0        	           
+vscode-pyspark-123865	user-m-anane-ece	1       	2026-11-04 12:17:06.836188546 +0000 UTC	deployed	vscode-pyspark-3.2.7	           
+$ curl -i http://trino:8080/v1/info
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100   201    0   201    0     0  17543      0 --:--:-- --:--:-- --:--:-- 18272
+HTTP/1.1 200 OK
+Date: Sun, 08 Nov 2026 20:38:34 GMT
+Content-Type: application/json
+X-Content-Type-Options: nosniff
+Transfer-Encoding: chunked
+
+{"nodeId":"trino-coordinator-797c6668d8-4z85z","state":"ACTIVE","nodeVersion":{"version":"480"},"environment":"production","coordinator":true,"coordinatorId":"e8mqi","starting":false,"uptime":"45.61s"}$ echo
+
+$ true
+EXIT_CODE=0

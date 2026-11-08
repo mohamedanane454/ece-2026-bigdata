@@ -1,0 +1,326 @@
+===== lab10c - Sun Nov  8 08:42:07 PM UTC 2026 =====
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ export TRINO_HOST=trino
+$ TRINO_HOST=trino
+$ export TRINO_PORT=8080
+$ TRINO_PORT=8080
+$ export TRINO_USER=user-m-anane-ece
+$ TRINO_USER=user-m-anane-ece
+$ uv run python -u /home/onyxia/work/labkit/cells.py /home/onyxia/work/labkit/lab10c.py
+
+>>> [cellule 0]
+... import os
+... import pandas as pd
+... import trino
+... pd.set_option("display.width", 250); pd.set_option("display.max_columns", 20); pd.set_option("display.max_colwidth", 90)
+... 
+... CATALOG = "lakehouse"
+... 
+... conn = trino.dbapi.connect(
+...     host=os.environ["TRINO_HOST"],
+...     port=int(os.environ["TRINO_PORT"]),
+...     user=os.environ["TRINO_USER"],
+...     http_scheme="http",
+...     catalog=CATALOG,
+... )
+... 
+... def sql(statement):
+...     cur = conn.cursor()
+...     cur.execute(statement)
+...     rows = cur.fetchall()  # the query only completes when its results are fetched
+...     columns = [c[0] for c in cur.description] if cur.description else []
+...     return pd.DataFrame(rows, columns=columns)
+... 
+... def input_lines(plan_text):
+...     return [l.strip() for l in plan_text.splitlines() if "Input:" in l or "ScanFilter" in l or "TableScan" in l][:8]
+... # Lab 10 / lab-3 - star schema
+... print(sql("""
+...     CREATE TABLE lakehouse.gold.dim_user AS
+...     SELECT
+...         row_number() OVER (ORDER BY user_id) AS user_key,
+...         user_id, username, name, sex, birthdate, city, state, zip_code
+...     FROM lakehouse.silver.users
+... """))
+... print(sql("""
+...     CREATE TABLE lakehouse.gold.dim_product AS
+...     SELECT row_number() OVER (ORDER BY product) AS product_key, product
+...     FROM (SELECT DISTINCT product FROM lakehouse.silver.orders)
+... """))
+   rows
+0    50
+   rows
+0     6
+
+>>> [cellule 1]
+... first_day, last_day = sql("""
+...     SELECT CAST(min(ordered_at) AS date) AS first_day,
+...            CAST(max(ordered_at) AS date) AS last_day
+...     FROM lakehouse.silver.orders
+... """).iloc[0]
+... print(first_day, last_day)
+... print(sql(f"""
+...     CREATE TABLE lakehouse.gold.dim_date AS
+...     SELECT
+...         CAST(date_format(CAST(d AS timestamp), '%Y%m%d') AS integer) AS date_key,
+...         d                                       AS full_date,
+...         year(d)                                 AS year,
+...         quarter(d)                              AS quarter,
+...         month(d)                                AS month,
+...         date_format(CAST(d AS timestamp), '%M') AS month_name,
+...         day_of_week(d)                          AS day_of_week,
+...         day_of_week(d) IN (6, 7)                AS is_weekend
+...     FROM UNNEST(sequence(DATE '{first_day}', DATE '{last_day}', INTERVAL '1' DAY)) AS t(d)
+... """))
+2020-01-01 2020-04-27
+   rows
+0   118
+
+>>> [cellule 2]
+... print(sql("""
+...     CREATE TABLE lakehouse.gold.fact_orders AS
+...     SELECT
+...         o.order_id,
+...         u.user_key,
+...         p.product_key,
+...         CAST(date_format(o.ordered_at, '%Y%m%d') AS integer) AS date_key,
+...         o.ordered_at,
+...         o.quantity
+...     FROM lakehouse.silver.orders AS o
+...     LEFT JOIN lakehouse.gold.dim_user    AS u ON u.user_id = o.user_id
+...     LEFT JOIN lakehouse.gold.dim_product AS p ON p.product = o.product
+... """))
+... sql("""
+...     SELECT 'dim_user' AS table_name, count(*) AS row_count FROM lakehouse.gold.dim_user
+...     UNION ALL SELECT 'dim_product', count(*) FROM lakehouse.gold.dim_product
+...     UNION ALL SELECT 'dim_date', count(*) FROM lakehouse.gold.dim_date
+...     UNION ALL SELECT 'fact_orders', count(*) FROM lakehouse.gold.fact_orders
+... """)
+   rows
+0  2835
+    table_name  row_count
+0  dim_product          6
+1  fact_orders       2835
+2     dim_user         50
+3     dim_date        118
+
+>>> [cellule 3]
+... sql("""
+...     SELECT d.year, u.state, p.product,
+...            count(*)        AS orders,
+...            sum(f.quantity) AS units
+...     FROM lakehouse.gold.fact_orders AS f
+...     JOIN lakehouse.gold.dim_date    AS d ON d.date_key    = f.date_key
+...     JOIN lakehouse.gold.dim_user    AS u ON u.user_key    = f.user_key
+...     JOIN lakehouse.gold.dim_product AS p ON p.product_key = f.product_key
+...     GROUP BY d.year, u.state, p.product
+...     ORDER BY units DESC
+...     LIMIT 10
+... """)
+   year state    product  orders  units
+0  2020    FM    brioche      43    134
+1  2020    VI      bread      37    110
+2  2020    HI      bread      35    110
+3  2020    VI  croissant      34    107
+4  2020    HI  croissant      36    107
+5  2020    VI    brioche      33    104
+6  2020    FM  croissant      32    102
+7  2020    AE      bread      31    100
+8  2020    FM      donut      33     98
+9  2020    VT      drink      33     96
+
+>>> [cellule 4]
+... print(sql("""
+...     SELECT u.state, d.year, d.month,
+...            count(*)                   AS orders,
+...            sum(f.quantity)            AS units,
+...            count(DISTINCT f.user_key) AS buyers
+...     FROM lakehouse.gold.fact_orders AS f
+...     JOIN lakehouse.gold.dim_date    AS d ON d.date_key = f.date_key
+...     JOIN lakehouse.gold.dim_user    AS u ON u.user_key = f.user_key
+...     GROUP BY u.state, d.year, d.month
+...     ORDER BY d.year, d.month, u.state
+...     LIMIT 10
+... """))
+... print(sql("SELECT * FROM lakehouse.gold.orders_by_state_month ORDER BY month, state LIMIT 10"))
+  state  year  month  orders  units  buyers
+0    AL  2020      1      65    199       1
+1    AP  2020      1      17     49       1
+2    AS  2020      1      12     40       1
+3    CO  2020      1      17     43       1
+4    FM  2020      1      66    200       1
+5    GA  2020      1       4     12       1
+6    IN  2020      1      49    175       1
+7    KY  2020      1      84    261       1
+8    MH  2020      1      21     57       1
+9    NE  2020      1      11     30       1
+  state                     month  orders  units  buyers
+0    AL 2020-01-01 00:00:00+00:00      65    199       1
+1    AP 2020-01-01 00:00:00+00:00      17     49       1
+2    AS 2020-01-01 00:00:00+00:00      12     40       1
+3    CO 2020-01-01 00:00:00+00:00      17     43       1
+4    FM 2020-01-01 00:00:00+00:00      66    200       1
+5    GA 2020-01-01 00:00:00+00:00       4     12       1
+6    IN 2020-01-01 00:00:00+00:00      49    175       1
+7    KY 2020-01-01 00:00:00+00:00      84    261       1
+8    MH 2020-01-01 00:00:00+00:00      21     57       1
+9    NE 2020-01-01 00:00:00+00:00      11     30       1
+
+>>> [cellule 5]
+... silver_orders = sql("SELECT count(*) AS v FROM lakehouse.silver.orders").iloc[0, 0]
+... fact_orders = sql("SELECT count(*) AS v FROM lakehouse.gold.fact_orders").iloc[0, 0]
+... silver_units = sql("SELECT sum(quantity) AS v FROM lakehouse.silver.orders").iloc[0, 0]
+... fact_units = sql("SELECT sum(quantity) AS v FROM lakehouse.gold.fact_orders").iloc[0, 0]
+... assert silver_orders == fact_orders, f"{silver_orders} != {fact_orders}"
+... assert silver_units == fact_units, f"{silver_units} != {fact_units}"
+... unmatched = sql("""
+...     SELECT count(*) AS v
+...     FROM lakehouse.gold.fact_orders AS f
+...     LEFT JOIN lakehouse.gold.dim_user    AS u ON u.user_key    = f.user_key
+...     LEFT JOIN lakehouse.gold.dim_product AS p ON p.product_key = f.product_key
+...     LEFT JOIN lakehouse.gold.dim_date    AS d ON d.date_key    = f.date_key
+...     WHERE u.user_key IS NULL OR p.product_key IS NULL OR d.date_key IS NULL
+... """).iloc[0, 0]
+... assert unmatched == 0, f"{unmatched} orders without a complete dimension row"
+... print("asserts OK", silver_orders, silver_units, unmatched)
+asserts OK 2835 8633 0
+
+>>> [cellule 6]
+... print(sql("SHOW TABLES FROM lakehouse.gold"))
+... conn.close()
+                        Table
+0                     cohorts
+1                    dim_date
+2                 dim_product
+3                    dim_user
+4                 fact_orders
+5       orders_by_state_month
+6  orders_by_state_month_part
+7                top_products
+8               user_activity
+$ mkdir -p lab_trino
+$ aws s3 --profile default sync s3://user-m-anane-ece/warehouse/gold ./lab_trino/gold/ --exclude '*/data/*'
+Completed 1.2 KiB/~51.8 KiB (5.4 KiB/s) with ~13 file(s) remaining (calculating...)Completed 3.8 KiB/~59.2 KiB (15.0 KiB/s) with ~14 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/20261108_204136_00044_e8mqi-f44b8010-374f-46f0-94b2-98d1ddf7d228.stats to lab_trino/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/20261108_204136_00044_e8mqi-f44b8010-374f-46f0-94b2-98d1ddf7d228.stats
+Completed 3.8 KiB/~64.2 KiB (15.0 KiB/s) with ~14 file(s) remaining (calculating...)Completed 4.4 KiB/~118.6 KiB (12.8 KiB/s) with ~17 file(s) remaining (calculating...)Completed 6.6 KiB/~118.6 KiB (18.9 KiB/s) with ~17 file(s) remaining (calculating...)Completed 10.4 KiB/~137.0 KiB (25.3 KiB/s) with ~21 file(s) remaining (calculating...)Completed 13.7 KiB/~153.4 KiB (32.6 KiB/s) with ~24 file(s) remaining (calculating...)Completed 18.1 KiB/~186.5 KiB (40.8 KiB/s) with ~31 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/00000-3e03cc37-88a0-4755-a68d-2dbdb6915220.metadata.json to lab_trino/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/00000-3e03cc37-88a0-4755-a68d-2dbdb6915220.metadata.json
+Completed 18.1 KiB/~186.5 KiB (40.8 KiB/s) with ~30 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/20261108_204214_00062_e8mqi-217d1eeb-5b4e-481d-80dc-799813b6d763.stats to lab_trino/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/20261108_204214_00062_e8mqi-217d1eeb-5b4e-481d-80dc-799813b6d763.stats
+Completed 18.1 KiB/~188.2 KiB (40.8 KiB/s) with ~30 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/snap-4367856305798797046-1-44241419-a8bc-4c39-86c6-0ff50b2ad472.avro to lab_trino/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/snap-4367856305798797046-1-44241419-a8bc-4c39-86c6-0ff50b2ad472.avro
+Completed 18.1 KiB/~199.5 KiB (40.8 KiB/s) with ~31 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/20261108_204210_00060_e8mqi-c521f98c-ac91-4e9c-b667-fe41eb31f926.stats to lab_trino/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/20261108_204210_00060_e8mqi-c521f98c-ac91-4e9c-b667-fe41eb31f926.stats
+Completed 18.1 KiB/~202.1 KiB (40.8 KiB/s) with ~31 file(s) remaining (calculating...)Completed 25.2 KiB/~205.8 KiB (49.1 KiB/s) with ~32 file(s) remaining (calculating...)Completed 32.5 KiB/~220.5 KiB (61.8 KiB/s) with ~36 file(s) remaining (calculating...)Completed 36.9 KiB/~234.7 KiB (69.1 KiB/s) with ~38 file(s) remaining (calculating...)Completed 44.4 KiB/~251.0 KiB (82.5 KiB/s) with ~42 file(s) remaining (calculating...)Completed 49.4 KiB/~262.4 KiB (91.2 KiB/s) with ~44 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/00000-d607d743-da77-4c76-ad26-138d2f4ba07e.metadata.json to lab_trino/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/00000-d607d743-da77-4c76-ad26-138d2f4ba07e.metadata.json
+Completed 49.4 KiB/~262.4 KiB (91.2 KiB/s) with ~43 file(s) remaining (calculating...)download: s3://user-m-anane-ece/warehouse/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/44241419-a8bc-4c39-86c6-0ff50b2ad472-m0.avro to lab_trino/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/44241419-a8bc-4c39-86c6-0ff50b2ad472-m0.avro
+Completed 49.4 KiB/~262.4 KiB (91.2 KiB/s) with ~42 file(s) remaining (calculating...)Completed 53.7 KiB/266.8 KiB (97.1 KiB/s) with 43 file(s) remaining                   download: s3://user-m-anane-ece/warehouse/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/00000-8bd9f701-6eec-4409-a080-89042f7aa066.metadata.json to lab_trino/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/00000-8bd9f701-6eec-4409-a080-89042f7aa066.metadata.json
+Completed 53.7 KiB/266.8 KiB (97.1 KiB/s) with 42 file(s) remainingCompleted 58.1 KiB/266.8 KiB (102.4 KiB/s) with 42 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/115ea4bc-c884-4828-b508-0bc4d552e487-m0.avro to lab_trino/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/115ea4bc-c884-4828-b508-0bc4d552e487-m0.avro
+Completed 58.1 KiB/266.8 KiB (102.4 KiB/s) with 41 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/snap-5942433370850297738-1-4ddab133-aee8-4d45-af5f-fa94869d26fc.avro to lab_trino/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/snap-5942433370850297738-1-4ddab133-aee8-4d45-af5f-fa94869d26fc.avro
+Completed 58.1 KiB/266.8 KiB (102.4 KiB/s) with 40 file(s) remainingCompleted 61.1 KiB/266.8 KiB (105.1 KiB/s) with 40 file(s) remainingCompleted 64.7 KiB/266.8 KiB (111.0 KiB/s) with 40 file(s) remainingCompleted 67.5 KiB/266.8 KiB (114.5 KiB/s) with 40 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/4ddab133-aee8-4d45-af5f-fa94869d26fc-m0.avro to lab_trino/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/4ddab133-aee8-4d45-af5f-fa94869d26fc-m0.avro
+Completed 67.5 KiB/266.8 KiB (114.5 KiB/s) with 39 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/20261108_204208_00059_e8mqi-e9a9c7c1-f4b3-48cc-aaa9-5ff07cfdbf6d.stats to lab_trino/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/20261108_204208_00059_e8mqi-e9a9c7c1-f4b3-48cc-aaa9-5ff07cfdbf6d.stats
+Completed 67.5 KiB/266.8 KiB (114.5 KiB/s) with 38 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/snap-1066902086706508251-1-e551906e-91d7-4fc7-9624-ceecdb21599e.avro to lab_trino/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/snap-1066902086706508251-1-e551906e-91d7-4fc7-9624-ceecdb21599e.avro
+Completed 67.5 KiB/266.8 KiB (114.5 KiB/s) with 37 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/snap-7267593418000801047-1-115ea4bc-c884-4828-b508-0bc4d552e487.avro to lab_trino/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/snap-7267593418000801047-1-115ea4bc-c884-4828-b508-0bc4d552e487.avro
+Completed 67.5 KiB/266.8 KiB (114.5 KiB/s) with 36 file(s) remainingCompleted 74.4 KiB/266.8 KiB (120.8 KiB/s) with 36 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/00000-4a82f7e3-1ed3-438b-aabd-8a5aec013d8b.metadata.json to lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/00000-4a82f7e3-1ed3-438b-aabd-8a5aec013d8b.metadata.json
+Completed 74.4 KiB/266.8 KiB (120.8 KiB/s) with 35 file(s) remainingCompleted 81.7 KiB/266.8 KiB (130.3 KiB/s) with 35 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/00000-32a6ec5b-fd7e-464b-9586-2bed35af9768.metadata.json to lab_trino/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/00000-32a6ec5b-fd7e-464b-9586-2bed35af9768.metadata.json
+Completed 81.7 KiB/266.8 KiB (130.3 KiB/s) with 34 file(s) remainingCompleted 83.8 KiB/266.8 KiB (131.6 KiB/s) with 34 file(s) remainingCompleted 87.8 KiB/266.8 KiB (136.8 KiB/s) with 34 file(s) remainingCompleted 92.2 KiB/266.8 KiB (142.5 KiB/s) with 34 file(s) remainingCompleted 99.3 KiB/266.8 KiB (153.2 KiB/s) with 34 file(s) remainingCompleted 106.4 KiB/266.8 KiB (164.0 KiB/s) with 34 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/61f849f7-939f-426f-8522-72a7c3dffe29-m0.avro to lab_trino/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/61f849f7-939f-426f-8522-72a7c3dffe29-m0.avro
+Completed 106.4 KiB/266.8 KiB (164.0 KiB/s) with 33 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/20261108_204037_00018_e8mqi-58059746-fb06-43d7-be67-9073beffd2a4.stats to lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/20261108_204037_00018_e8mqi-58059746-fb06-43d7-be67-9073beffd2a4.stats
+Completed 106.4 KiB/266.8 KiB (164.0 KiB/s) with 32 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/00000-682dfaea-e915-43ad-bce0-0681ef93f905.metadata.json to lab_trino/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/00000-682dfaea-e915-43ad-bce0-0681ef93f905.metadata.json
+Completed 106.4 KiB/266.8 KiB (164.0 KiB/s) with 31 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/e551906e-91d7-4fc7-9624-ceecdb21599e-m0.avro to lab_trino/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/e551906e-91d7-4fc7-9624-ceecdb21599e-m0.avro
+Completed 106.4 KiB/266.8 KiB (164.0 KiB/s) with 30 file(s) remainingCompleted 110.9 KiB/266.8 KiB (164.5 KiB/s) with 30 file(s) remainingCompleted 115.3 KiB/266.8 KiB (170.9 KiB/s) with 30 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/00001-e3b19e91-933b-4d92-8c19-824db36d4f69.metadata.json to lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/00001-e3b19e91-933b-4d92-8c19-824db36d4f69.metadata.json
+Completed 115.3 KiB/266.8 KiB (170.9 KiB/s) with 29 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/e1af5788-e47f-4f77-a0f4-6651a4dc9bc4-m0.avro to lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/e1af5788-e47f-4f77-a0f4-6651a4dc9bc4-m0.avro
+Completed 115.3 KiB/266.8 KiB (170.9 KiB/s) with 28 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/74280181-da8d-47b2-ace4-bf8620b47738-m0.avro to lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/74280181-da8d-47b2-ace4-bf8620b47738-m0.avro
+Completed 115.3 KiB/266.8 KiB (170.9 KiB/s) with 27 file(s) remainingCompleted 117.4 KiB/266.8 KiB (169.6 KiB/s) with 27 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/snap-8779377654668270728-1-61f849f7-939f-426f-8522-72a7c3dffe29.avro to lab_trino/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/snap-8779377654668270728-1-61f849f7-939f-426f-8522-72a7c3dffe29.avro
+Completed 117.4 KiB/266.8 KiB (169.6 KiB/s) with 26 file(s) remainingCompleted 120.3 KiB/266.8 KiB (171.3 KiB/s) with 26 file(s) remainingCompleted 127.5 KiB/266.8 KiB (181.3 KiB/s) with 26 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/snap-5619459614434794671-1-74280181-da8d-47b2-ace4-bf8620b47738.avro to lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/snap-5619459614434794671-1-74280181-da8d-47b2-ace4-bf8620b47738.avro
+Completed 127.5 KiB/266.8 KiB (181.3 KiB/s) with 25 file(s) remainingCompleted 131.9 KiB/266.8 KiB (184.4 KiB/s) with 25 file(s) remainingCompleted 136.2 KiB/266.8 KiB (189.5 KiB/s) with 25 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/snap-3977673318601329358-1-c7307c31-3b43-43c8-8d72-a6acddb24926.avro to lab_trino/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/snap-3977673318601329358-1-c7307c31-3b43-43c8-8d72-a6acddb24926.avro
+Completed 136.2 KiB/266.8 KiB (189.5 KiB/s) with 24 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/snap-9100750026128971426-1-e1af5788-e47f-4f77-a0f4-6651a4dc9bc4.avro to lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/snap-9100750026128971426-1-e1af5788-e47f-4f77-a0f4-6651a4dc9bc4.avro
+Completed 136.2 KiB/266.8 KiB (189.5 KiB/s) with 23 file(s) remainingCompleted 141.7 KiB/266.8 KiB (192.8 KiB/s) with 23 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/20261108_204125_00039_e8mqi-348ca6cd-6e50-4302-a1f1-a7584d313c0a.stats to lab_trino/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/20261108_204125_00039_e8mqi-348ca6cd-6e50-4302-a1f1-a7584d313c0a.stats
+Completed 141.7 KiB/266.8 KiB (192.8 KiB/s) with 22 file(s) remainingCompleted 149.4 KiB/266.8 KiB (200.1 KiB/s) with 22 file(s) remainingCompleted 150.5 KiB/266.8 KiB (200.7 KiB/s) with 22 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/00000-7dc26a36-2790-45ba-96a1-221d79060cca.metadata.json to lab_trino/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/00000-7dc26a36-2790-45ba-96a1-221d79060cca.metadata.json
+Completed 150.5 KiB/266.8 KiB (200.7 KiB/s) with 21 file(s) remainingCompleted 151.6 KiB/266.8 KiB (199.3 KiB/s) with 21 file(s) remainingCompleted 198.6 KiB/266.8 KiB (256.5 KiB/s) with 21 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/sales_by_product/metadata/snap-8484623297897640821-1-12b8427c-880f-491c-b669-a16bfdb64deb.avro to lab_trino/gold/sales_by_product/metadata/snap-8484623297897640821-1-12b8427c-880f-491c-b669-a16bfdb64deb.avro
+Completed 198.6 KiB/266.8 KiB (256.5 KiB/s) with 20 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/00002-8ac86e56-6aa7-4b7a-b8b6-12f30e9ec61e.metadata.json to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/00002-8ac86e56-6aa7-4b7a-b8b6-12f30e9ec61e.metadata.json
+Completed 198.6 KiB/266.8 KiB (256.5 KiB/s) with 19 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/20261108_204052_00020_e8mqi-0cd4c564-a45e-4752-b243-07afbff6feb6.stats to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/20261108_204052_00020_e8mqi-0cd4c564-a45e-4752-b243-07afbff6feb6.stats
+Completed 198.6 KiB/266.8 KiB (256.5 KiB/s) with 18 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/20261108_204218_00063_e8mqi-ffde7f4f-06c3-4f09-be90-e5fa779aaf64.stats to lab_trino/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/20261108_204218_00063_e8mqi-ffde7f4f-06c3-4f09-be90-e5fa779aaf64.stats
+Completed 198.6 KiB/266.8 KiB (256.5 KiB/s) with 17 file(s) remainingCompleted 205.6 KiB/266.8 KiB (247.2 KiB/s) with 17 file(s) remainingCompleted 209.3 KiB/266.8 KiB (251.4 KiB/s) with 17 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/74280181-da8d-47b2-ace4-bf8620b47738-m1.avro to lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/74280181-da8d-47b2-ace4-bf8620b47738-m1.avro
+Completed 209.3 KiB/266.8 KiB (251.4 KiB/s) with 16 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/c7307c31-3b43-43c8-8d72-a6acddb24926-m0.avro to lab_trino/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/c7307c31-3b43-43c8-8d72-a6acddb24926-m0.avro
+Completed 209.3 KiB/266.8 KiB (251.4 KiB/s) with 15 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/20261108_204118_00034_e8mqi-1b38dcc7-a53b-48c9-abfb-891032d72be5.stats to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/20261108_204118_00034_e8mqi-1b38dcc7-a53b-48c9-abfb-891032d72be5.stats
+Completed 209.3 KiB/266.8 KiB (251.4 KiB/s) with 14 file(s) remainingCompleted 216.2 KiB/266.8 KiB (247.8 KiB/s) with 14 file(s) remainingCompleted 223.3 KiB/266.8 KiB (255.2 KiB/s) with 14 file(s) remainingCompleted 227.6 KiB/266.8 KiB (255.1 KiB/s) with 14 file(s) remainingCompleted 232.0 KiB/266.8 KiB (258.1 KiB/s) with 14 file(s) remainingCompleted 236.4 KiB/266.8 KiB (262.8 KiB/s) with 14 file(s) remainingCompleted 239.6 KiB/266.8 KiB (265.5 KiB/s) with 14 file(s) remainingCompleted 244.0 KiB/266.8 KiB (270.3 KiB/s) with 14 file(s) remainingCompleted 246.6 KiB/266.8 KiB (271.0 KiB/s) with 14 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/89a819ae-492b-4d61-ae39-15db35b470af-m0.avro to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/89a819ae-492b-4d61-ae39-15db35b470af-m0.avro
+Completed 246.6 KiB/266.8 KiB (271.0 KiB/s) with 13 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/sales_by_product/metadata/12b8427c-880f-491c-b669-a16bfdb64deb-m0.avro to lab_trino/gold/sales_by_product/metadata/12b8427c-880f-491c-b669-a16bfdb64deb-m0.avro
+Completed 246.6 KiB/266.8 KiB (271.0 KiB/s) with 12 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/snap-5728436752750004236-1-89a819ae-492b-4d61-ae39-15db35b470af.avro to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/snap-5728436752750004236-1-89a819ae-492b-4d61-ae39-15db35b470af.avro
+Completed 246.6 KiB/266.8 KiB (271.0 KiB/s) with 11 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/00001-ce0da676-e406-4454-a565-490166c5e0b1.metadata.json to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/00001-ce0da676-e406-4454-a565-490166c5e0b1.metadata.json
+Completed 246.6 KiB/266.8 KiB (271.0 KiB/s) with 10 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/83a933fe-8ea7-4d8a-8ffa-288080cdbc1c-m0.avro to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/83a933fe-8ea7-4d8a-8ffa-288080cdbc1c-m0.avro
+Completed 246.6 KiB/266.8 KiB (271.0 KiB/s) with 9 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/00000-3646e1fc-1b12-4559-a95b-80ce818f8aa2.metadata.json to lab_trino/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/00000-3646e1fc-1b12-4559-a95b-80ce818f8aa2.metadata.json
+Completed 246.6 KiB/266.8 KiB (271.0 KiB/s) with 8 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/snap-7906888402579192158-1-fe351360-b552-421a-a763-37176a6af7b8.avro to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/snap-7906888402579192158-1-fe351360-b552-421a-a763-37176a6af7b8.avro
+Completed 246.6 KiB/266.8 KiB (271.0 KiB/s) with 7 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/snap-4105991598857475335-1-a5a4184c-8704-49b7-a036-a221ef2f9d36.avro to lab_trino/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/snap-4105991598857475335-1-a5a4184c-8704-49b7-a036-a221ef2f9d36.avro
+Completed 246.6 KiB/266.8 KiB (271.0 KiB/s) with 6 file(s) remainingCompleted 248.3 KiB/266.8 KiB (259.8 KiB/s) with 6 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/snap-6065897832347918383-1-83a933fe-8ea7-4d8a-8ffa-288080cdbc1c.avro to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/snap-6065897832347918383-1-83a933fe-8ea7-4d8a-8ffa-288080cdbc1c.avro
+Completed 248.3 KiB/266.8 KiB (259.8 KiB/s) with 5 file(s) remainingCompleted 255.4 KiB/266.8 KiB (266.5 KiB/s) with 5 file(s) remainingCompleted 262.7 KiB/266.8 KiB (273.7 KiB/s) with 5 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/00000-66d9619e-a834-40a2-aa73-f3f661bde712.metadata.json to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/00000-66d9619e-a834-40a2-aa73-f3f661bde712.metadata.json
+Completed 262.7 KiB/266.8 KiB (273.7 KiB/s) with 4 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/sales_by_product/metadata/00000-bd44b87c-b425-4be6-b3b2-a184fecd5e2a.metadata.json to lab_trino/gold/sales_by_product/metadata/00000-bd44b87c-b425-4be6-b3b2-a184fecd5e2a.metadata.json
+Completed 262.7 KiB/266.8 KiB (273.7 KiB/s) with 3 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/fe351360-b552-421a-a763-37176a6af7b8-m0.avro to lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/fe351360-b552-421a-a763-37176a6af7b8-m0.avro
+Completed 262.7 KiB/266.8 KiB (273.7 KiB/s) with 2 file(s) remainingCompleted 266.8 KiB/266.8 KiB (276.4 KiB/s) with 2 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/a5a4184c-8704-49b7-a036-a221ef2f9d36-m0.avro to lab_trino/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/a5a4184c-8704-49b7-a036-a221ef2f9d36-m0.avro
+Completed 266.8 KiB/266.8 KiB (276.4 KiB/s) with 1 file(s) remainingdownload: s3://user-m-anane-ece/warehouse/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/20261108_204057_00022_e8mqi-92a390e9-4334-4ef6-9ba4-c1f628ad46b8.stats to lab_trino/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/20261108_204057_00022_e8mqi-92a390e9-4334-4ef6-9ba4-c1f628ad46b8.stats
+$ find lab_trino -type f
+$ sed 's#/[^/]*$##'
+$ sort
+$ uniq -c
+      4 lab_trino/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata
+      4 lab_trino/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata
+      4 lab_trino/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata
+      4 lab_trino/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata
+      4 lab_trino/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata
+      8 lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata
+      4 lab_trino/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata
+      3 lab_trino/gold/sales_by_product/metadata
+     11 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata
+      4 lab_trino/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata
+$ git add lab_trino
+$ git commit -m 'feat: trino gold metadata'
+[main 40ee8a2] feat: trino gold metadata
+ 50 files changed, 13 insertions(+)
+ create mode 100644 lab_trino/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/00000-3e03cc37-88a0-4755-a68d-2dbdb6915220.metadata.json
+ create mode 100644 lab_trino/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/20261108_204136_00044_e8mqi-f44b8010-374f-46f0-94b2-98d1ddf7d228.stats
+ create mode 100644 lab_trino/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/44241419-a8bc-4c39-86c6-0ff50b2ad472-m0.avro
+ create mode 100644 lab_trino/gold/cohorts-7e79892fdc1f456fb0a0e6c78bfe6a10/metadata/snap-4367856305798797046-1-44241419-a8bc-4c39-86c6-0ff50b2ad472.avro
+ create mode 100644 lab_trino/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/00000-8bd9f701-6eec-4409-a080-89042f7aa066.metadata.json
+ create mode 100644 lab_trino/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/20261108_204214_00062_e8mqi-217d1eeb-5b4e-481d-80dc-799813b6d763.stats
+ create mode 100644 lab_trino/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/4ddab133-aee8-4d45-af5f-fa94869d26fc-m0.avro
+ create mode 100644 lab_trino/gold/dim_date-90c37201cd444d3f8d72ce0da72c8d03/metadata/snap-5942433370850297738-1-4ddab133-aee8-4d45-af5f-fa94869d26fc.avro
+ create mode 100644 lab_trino/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/00000-d607d743-da77-4c76-ad26-138d2f4ba07e.metadata.json
+ create mode 100644 lab_trino/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/20261108_204210_00060_e8mqi-c521f98c-ac91-4e9c-b667-fe41eb31f926.stats
+ create mode 100644 lab_trino/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/e551906e-91d7-4fc7-9624-ceecdb21599e-m0.avro
+ create mode 100644 lab_trino/gold/dim_product-45f14d6d52fc4167a438de5acd11a52d/metadata/snap-1066902086706508251-1-e551906e-91d7-4fc7-9624-ceecdb21599e.avro
+ create mode 100644 lab_trino/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/00000-32a6ec5b-fd7e-464b-9586-2bed35af9768.metadata.json
+ create mode 100644 lab_trino/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/115ea4bc-c884-4828-b508-0bc4d552e487-m0.avro
+ create mode 100644 lab_trino/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/20261108_204208_00059_e8mqi-e9a9c7c1-f4b3-48cc-aaa9-5ff07cfdbf6d.stats
+ create mode 100644 lab_trino/gold/dim_user-f50a1049687d49ecb804a4e0a9f758cf/metadata/snap-7267593418000801047-1-115ea4bc-c884-4828-b508-0bc4d552e487.avro
+ create mode 100644 lab_trino/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/00000-682dfaea-e915-43ad-bce0-0681ef93f905.metadata.json
+ create mode 100644 lab_trino/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/20261108_204218_00063_e8mqi-ffde7f4f-06c3-4f09-be90-e5fa779aaf64.stats
+ create mode 100644 lab_trino/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/61f849f7-939f-426f-8522-72a7c3dffe29-m0.avro
+ create mode 100644 lab_trino/gold/fact_orders-889eb9294b304a03a0007ce3a53c80cb/metadata/snap-8779377654668270728-1-61f849f7-939f-426f-8522-72a7c3dffe29.avro
+ create mode 100644 lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/00000-4a82f7e3-1ed3-438b-aabd-8a5aec013d8b.metadata.json
+ create mode 100644 lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/00001-e3b19e91-933b-4d92-8c19-824db36d4f69.metadata.json
+ create mode 100644 lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/20261108_204037_00018_e8mqi-58059746-fb06-43d7-be67-9073beffd2a4.stats
+ create mode 100644 lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/74280181-da8d-47b2-ace4-bf8620b47738-m0.avro
+ create mode 100644 lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/74280181-da8d-47b2-ace4-bf8620b47738-m1.avro
+ create mode 100644 lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/e1af5788-e47f-4f77-a0f4-6651a4dc9bc4-m0.avro
+ create mode 100644 lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/snap-5619459614434794671-1-74280181-da8d-47b2-ace4-bf8620b47738.avro
+ create mode 100644 lab_trino/gold/orders_by_state_month-d3a7cb75863e4544a2af148be53b6bea/metadata/snap-9100750026128971426-1-e1af5788-e47f-4f77-a0f4-6651a4dc9bc4.avro
+ create mode 100644 lab_trino/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/00000-7dc26a36-2790-45ba-96a1-221d79060cca.metadata.json
+ create mode 100644 lab_trino/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/20261108_204125_00039_e8mqi-348ca6cd-6e50-4302-a1f1-a7584d313c0a.stats
+ create mode 100644 lab_trino/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/c7307c31-3b43-43c8-8d72-a6acddb24926-m0.avro
+ create mode 100644 lab_trino/gold/orders_by_state_month_part-71a2452889ed4bf6b1d21aad4fcac99d/metadata/snap-3977673318601329358-1-c7307c31-3b43-43c8-8d72-a6acddb24926.avro
+ create mode 100644 lab_trino/gold/sales_by_product/metadata/00000-bd44b87c-b425-4be6-b3b2-a184fecd5e2a.metadata.json
+ create mode 100644 lab_trino/gold/sales_by_product/metadata/12b8427c-880f-491c-b669-a16bfdb64deb-m0.avro
+ create mode 100644 lab_trino/gold/sales_by_product/metadata/snap-8484623297897640821-1-12b8427c-880f-491c-b669-a16bfdb64deb.avro
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/00000-66d9619e-a834-40a2-aa73-f3f661bde712.metadata.json
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/00001-ce0da676-e406-4454-a565-490166c5e0b1.metadata.json
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/00002-8ac86e56-6aa7-4b7a-b8b6-12f30e9ec61e.metadata.json
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/20261108_204052_00020_e8mqi-0cd4c564-a45e-4752-b243-07afbff6feb6.stats
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/20261108_204118_00034_e8mqi-1b38dcc7-a53b-48c9-abfb-891032d72be5.stats
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/83a933fe-8ea7-4d8a-8ffa-288080cdbc1c-m0.avro
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/89a819ae-492b-4d61-ae39-15db35b470af-m0.avro
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/fe351360-b552-421a-a763-37176a6af7b8-m0.avro
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/snap-5728436752750004236-1-89a819ae-492b-4d61-ae39-15db35b470af.avro
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/snap-6065897832347918383-1-83a933fe-8ea7-4d8a-8ffa-288080cdbc1c.avro
+ create mode 100644 lab_trino/gold/top_products-d813eb9fbb554653a9be588b11d69a06/metadata/snap-7906888402579192158-1-fe351360-b552-421a-a763-37176a6af7b8.avro
+ create mode 100644 lab_trino/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/00000-3646e1fc-1b12-4559-a95b-80ce818f8aa2.metadata.json
+ create mode 100644 lab_trino/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/20261108_204057_00022_e8mqi-92a390e9-4334-4ef6-9ba4-c1f628ad46b8.stats
+ create mode 100644 lab_trino/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/a5a4184c-8704-49b7-a036-a221ef2f9d36-m0.avro
+ create mode 100644 lab_trino/gold/user_activity-396495ba017a4f5d8dbbf90ca0d1c5bb/metadata/snap-4105991598857475335-1-a5a4184c-8704-49b7-a036-a221ef2f9d36.avro
+$ git log --oneline
+$ head -3
+40ee8a2 feat: trino gold metadata
+a8b1be9 feat: trino dependency added
+8a03598 docs: un dossier par lab (commandes executees et resultats)
+$ true
+EXIT_CODE=0

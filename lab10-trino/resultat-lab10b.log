@@ -1,0 +1,590 @@
+===== lab10b - Sun Nov  8 08:39:00 PM UTC 2026 =====
+$ cd /home/onyxia/work/ece-2026-bigdata
+$ echo user-m-anane-ece
+user-m-anane-ece
+$ aws s3 --profile default ls s3://user-m-anane-ece/bronze/
+2026-11-04 12:47:31     331568 orders.csv
+2026-11-04 12:47:25       7351 users.csv
+$ export TRINO_HOST=trino
+$ TRINO_HOST=trino
+$ export TRINO_PORT=8080
+$ TRINO_PORT=8080
+$ export TRINO_USER=user-m-anane-ece
+$ TRINO_USER=user-m-anane-ece
+$ uv add trino pandas
+Resolved 69 packages in 652ms
+   Building ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+      Built ece-2026-bigdata @ file:///home/onyxia/work/ece-2026-bigdata
+Downloading numpy (15.9MiB)
+Downloading lz4 (1.3MiB)
+Downloading pandas (11.4MiB)
+Downloading zstandard (5.3MiB)
+ Downloaded lz4
+ Downloaded zstandard
+ Downloaded pandas
+ Downloaded numpy
+Prepared 8 packages in 1.90s
+Uninstalled 1 package in 4ms
+Installed 8 packages in 149ms
+ ~ ece-2026-bigdata==0.1.0 (from file:///home/onyxia/work/ece-2026-bigdata)
+ + lz4==4.4.5
+ + numpy==2.5.4
+ + orjson==3.13.0
+ + pandas==3.1.1
+ + trino==0.340.0
+ + tzlocal==5.4.5
+ + zstandard==0.25.0
+$ uv run python -u /home/onyxia/work/labkit/cells.py /home/onyxia/work/labkit/lab10b.py
+
+>>> [cellule 0]
+... import os
+... import pandas as pd
+... import trino
+... pd.set_option("display.width", 250); pd.set_option("display.max_columns", 20); pd.set_option("display.max_colwidth", 90)
+... 
+... CATALOG = "lakehouse"
+... 
+... conn = trino.dbapi.connect(
+...     host=os.environ["TRINO_HOST"],
+...     port=int(os.environ["TRINO_PORT"]),
+...     user=os.environ["TRINO_USER"],
+...     http_scheme="http",
+...     catalog=CATALOG,
+... )
+... 
+... def sql(statement):
+...     cur = conn.cursor()
+...     cur.execute(statement)
+...     rows = cur.fetchall()  # the query only completes when its results are fetched
+...     columns = [c[0] for c in cur.description] if cur.description else []
+...     return pd.DataFrame(rows, columns=columns)
+... 
+... def input_lines(plan_text):
+...     return [l.strip() for l in plan_text.splitlines() if "Input:" in l or "ScanFilter" in l or "TableScan" in l][:8]
+... sql("SELECT version()")
+  _col0
+0   480
+
+>>> [cellule 1]
+... sql("SHOW CATALOGS")
+     Catalog
+0  lakehouse
+1     system
+2      tpcds
+3       tpch
+
+>>> [cellule 2]
+... print(sql("SHOW SCHEMAS FROM lakehouse"))
+... print(sql("SHOW TABLES FROM lakehouse.silver"))
+               Schema
+0  information_schema
+1              silver
+2              system
+    Table
+0  orders
+1   users
+
+>>> [cellule 3]
+... print(sql("DESCRIBE lakehouse.silver.orders"))
+... print(sql("DESCRIBE lakehouse.silver.users"))
+       Column                         Type Extra Comment
+0    order_id                      varchar              
+1     user_id                      varchar              
+2  ordered_at  timestamp(6) with time zone              
+3    quantity                      integer              
+4     product                      varchar              
+5      source                      varchar              
+      Column     Type Extra Comment
+0    user_id  varchar              
+1   username  varchar              
+2       name  varchar              
+3        sex  varchar              
+4      email  varchar              
+5  birthdate     date              
+6     street  varchar              
+7       city  varchar              
+8      state  varchar              
+9   zip_code  varchar              
+
+>>> [cellule 4]
+... print(sql("SELECT count(*) AS orders FROM lakehouse.silver.orders"))
+... print(sql("SELECT count(*) AS users FROM lakehouse.silver.users"))
+   orders
+0    2834
+   users
+0     50
+
+>>> [cellule 5]
+... sql("""
+...     SELECT state, count(*) AS users, count_if(city IS NULL) AS missing_city
+...     FROM lakehouse.silver.users
+...     GROUP BY state
+...     ORDER BY users DESC
+...     LIMIT 10
+... """)
+  state  users  missing_city
+0    AE      3             3
+1    FM      3             0
+2    NM      2             0
+3    VI      2             0
+4    DE      2             0
+5    VT      2             0
+6    HI      2             0
+7    AP      2             2
+8    TX      2             0
+9    PA      2             0
+
+>>> [cellule 6]
+... sql("""
+...     SELECT count(*) AS orphan_orders
+...     FROM lakehouse.silver.orders AS o
+...     LEFT JOIN lakehouse.silver.users AS u ON u.user_id = o.user_id
+...     WHERE u.user_id IS NULL
+... """)
+   orphan_orders
+0              0
+
+>>> [cellule 7]
+... print(sql("""SELECT snapshot_id, committed_at, operation FROM lakehouse.silver."orders$snapshots" ORDER BY committed_at"""))
+... print(sql("""SELECT file_path, file_format, record_count, file_size_in_bytes FROM lakehouse.silver."orders$files" """))
+... print(sql('SELECT * FROM lakehouse.silver."orders$history"'))
+           snapshot_id                  committed_at  operation
+0  5971824705520254429 2026-11-04 13:03:32.922+00:00  overwrite
+1  5530743030737104451 2026-11-04 13:03:54.933+00:00     append
+2  1614423503086333191 2026-11-04 13:04:56.680+00:00     append
+3  5785441293415314053 2026-11-04 13:05:03.963+00:00     append
+                                                                                   file_path file_format  record_count  file_size_in_bytes
+0  s3a://user-m-anane-ece/warehouse/silver/orders/data/00000-20-cfe454fa-228e-4f3a-8e72-0...     PARQUET             1                2201
+1  s3a://user-m-anane-ece/warehouse/silver/orders/data/00000-127-d0a7b3e1-c214-4383-b533-...     PARQUET             1                1943
+2  s3a://user-m-anane-ece/warehouse/silver/orders/data/00000-6-4be77fc1-00ed-4fcf-b293-0e...     PARQUET             3                2048
+3  s3a://user-m-anane-ece/warehouse/silver/orders/data/00000-43-19316fc3-6a81-4444-a77e-4...     PARQUET          2829               84055
+                made_current_at          snapshot_id     parent_id  is_current_ancestor
+0 2026-11-04 13:03:32.922+00:00  5971824705520254429           NaN                 True
+1 2026-11-04 13:03:54.933+00:00  5530743030737104451  5.971825e+18                 True
+2 2026-11-04 13:04:56.680+00:00  1614423503086333191  5.530743e+18                 True
+3 2026-11-04 13:05:03.963+00:00  5785441293415314053  1.614424e+18                 True
+
+>>> [cellule 8]
+... import subprocess
+... print(subprocess.run("aws s3 --profile default ls s3://$LAB_BUCKET_NAME/warehouse/silver/orders/data/", shell=True, capture_output=True, text=True).stdout)
+2026-11-04 13:03:54       1943 00000-127-d0a7b3e1-c214-4383-b533-ffd3b69869f1-0-00001.parquet
+2026-11-04 13:05:03       2201 00000-20-cfe454fa-228e-4f3a-8e72-08465e913dbf-0-00001.parquet
+2026-11-04 13:03:32      84055 00000-43-19316fc3-6a81-4444-a77e-463cc4a7efa3-0-00001.parquet
+2026-11-04 13:04:56       2048 00000-6-4be77fc1-00ed-4fcf-b293-0e2f99efd52e-0-00001.parquet
+
+
+>>> [cellule 9]
+... plan = sql("""
+...     EXPLAIN (TYPE DISTRIBUTED)
+...     SELECT u.state, count(*) AS orders
+...     FROM lakehouse.silver.orders AS o
+...     JOIN lakehouse.silver.users  AS u ON u.user_id = o.user_id
+...     GROUP BY u.state
+... """)
+... print(plan.iloc[0, 0])
+Trino version: 480
+Fragment 0 [HASH]
+    Output layout: [state, count]
+    Output partitioning: SINGLE []
+    Output[columnNames = [state, orders]]
+    │   Layout: [state:varchar, count:bigint]
+    │   Estimates: {rows: ? (?), cpu: 0, memory: 0B, network: 0B}
+    │   orders := count
+    └─ Aggregate[type = FINAL, keys = [state]]
+       │   Layout: [state:varchar, count:bigint]
+       │   Estimates: {rows: ? (?), cpu: ?, memory: ?, network: 0B}
+       │   count := count(count_4)
+       └─ LocalExchange[partitioning = HASH, arguments = [state::varchar]]
+          │   Layout: [state:varchar, count_4:bigint]
+          │   Estimates: {rows: ? (?), cpu: ?, memory: 0B, network: 0B}
+          └─ RemoteSource[sourceFragmentIds = [1]]
+                 Layout: [state:varchar, count_4:bigint]
+
+Fragment 1 [SOURCE]
+    Output layout: [state, count_4]
+    Output partitioning: HASH [state]
+    Aggregate[type = PARTIAL, keys = [state]]
+    │   Layout: [state:varchar, count_4:bigint]
+    │   count_4 := count(*)
+    └─ InnerJoin[criteria = (user_id = user_id_0), distribution = REPLICATED]
+       │   Layout: [state:varchar]
+       │   Estimates: {rows: ? (?), cpu: ?, memory: 4.02kB, network: 0B}
+       │   Distribution: REPLICATED
+       │   dynamicFilterAssignments = {user_id_0 -> #df_314}
+       ├─ ScanFilter[table = lakehouse:silver.orders$data@5785441293415314053, dynamicFilters = {user_id = #df_314}]
+       │      Layout: [user_id:varchar]
+       │      Estimates: {rows: 2834 (23.18kB), cpu: 23.18k, memory: 0B, network: 0B}/{rows: 2834 (23.18kB), cpu: 23.18k, memory: 0B, network: 0B}
+       │      user_id := 2:user_id:varchar
+       └─ LocalExchange[partitioning = SINGLE]
+          │   Layout: [user_id_0:varchar, state:varchar]
+          │   Estimates: {rows: 50 (4.02kB), cpu: 0, memory: 0B, network: 0B}
+          └─ RemoteSource[sourceFragmentIds = [2]]
+                 Layout: [user_id_0:varchar, state:varchar]
+
+Fragment 2 [SOURCE]
+    Output layout: [user_id_0, state]
+    Output partitioning: BROADCAST []
+    TableScan[table = lakehouse:silver.users$data@5180476039568032452]
+        Layout: [user_id_0:varchar, state:varchar]
+        Estimates: {rows: 50 (4.02kB), cpu: 4.02k, memory: 0B, network: 0B}
+        user_id_0 := 1:user_id:varchar
+        state := 9:state:varchar
+
+
+
+>>> [cellule 10]
+... stats = sql("""
+...     EXPLAIN ANALYZE
+...     SELECT u.state, count(*) AS orders
+...     FROM lakehouse.silver.orders AS o
+...     JOIN lakehouse.silver.users  AS u ON u.user_id = o.user_id
+...     GROUP BY u.state
+... """)
+... print(stats.iloc[0, 0])
+Trino version: 480
+Queued: 424.65us, Analysis: 1.12s, Planning: 576.66ms, Execution: 3.76s, Finishing: 0.00ns
+Fragment 1 [HASH]
+    CPU: 12.91ms, Scheduled: 162.16ms, Blocked 9.61s (Input: 4.81s, Output: 0.00ns), Input: 41 rows (656B); per task: avg.: 41.00 std.dev.: 0.00, Output: 37 rows (592B)
+    Peak Memory: 227.47kB, Tasks count: 1; per task: max: 227.47kB
+    Output layout: [state, count]
+    Output partitioning: SINGLE []
+    Aggregate[type = FINAL, keys = [state]]
+    │   Layout: [state:varchar, count:bigint]
+    │   Estimates: {rows: ? (?), cpu: ?, memory: ?, network: 0B}
+    │   CPU: 7.00ms (2.20%), Scheduled: 156.00ms (9.45%), Blocked: 0.00ns (0.00%), Output: 37 rows (592B)
+    │   Input avg.: 20.50 rows, Input std.dev.: 2.44%
+    │   count := count(count_4)
+    └─ LocalExchange[partitioning = HASH, arguments = [state::varchar]]
+       │   Layout: [state:varchar, count_4:bigint]
+       │   Estimates: {rows: ? (?), cpu: ?, memory: 0B, network: 0B}
+       │   CPU: 1.00ms (0.31%), Scheduled: 1.00ms (0.06%), Blocked: 4.80s (40.28%), Output: 41 rows (656B)
+       │   Input avg.: 20.50 rows, Input std.dev.: 80.49%
+       └─ RemoteSource[sourceFragmentIds = [2]]
+              Layout: [state:varchar, count_4:bigint]
+              CPU: 1.00ms (0.31%), Scheduled: 1.00ms (0.06%), Blocked: 4.81s (40.37%), Output: 41 rows (656B)
+              Input avg.: 20.50 rows, Input std.dev.: 80.49%
+
+Fragment 2 [SOURCE]
+    CPU: 299.97ms, Scheduled: 1.42s, Blocked 2.30s (Input: 718.80ms, Output: 0.00ns), Input: 2884 rows (126.87kB); per task: avg.: 2884.00 std.dev.: 0.00, Output: 41 rows (656B)
+    Peak Memory: 128.84kB, Tasks count: 1; per task: max: 128.84kB
+    Output layout: [state, count_4]
+    Output partitioning: HASH [state]
+    Aggregate[type = PARTIAL, keys = [state]]
+    │   Layout: [state:varchar, count_4:bigint]
+    │   CPU: 55.00ms (17.30%), Scheduled: 213.00ms (12.91%), Blocked: 0.00ns (0.00%), Output: 41 rows (656B)
+    │   Input avg.: 708.50 rows, Input std.dev.: 172.80%
+    │   count_4 := count(*)
+    └─ InnerJoin[criteria = (user_id = user_id_0), distribution = REPLICATED]
+       │   Layout: [state:varchar]
+       │   Estimates: {rows: ? (?), cpu: ?, memory: 4.02kB, network: 0B}
+       │   CPU: 95.00ms (29.87%), Scheduled: 426.00ms (25.82%), Blocked: 1.39s (11.66%), Output: 2834 rows (19.37kB)
+       │   Left (probe) Input avg.: 708.50 rows, Input std.dev.: 172.80%
+       │   Right (build) Input avg.: 50.00 rows, Input std.dev.: 0.00%
+       │   Distribution: REPLICATED
+       │   dynamicFilterAssignments = {user_id_0 -> #df_373}
+       ├─ ScanFilter[table = lakehouse:silver.orders$data@5785441293415314053, dynamicFilters = {user_id = #df_373}]
+       │      Layout: [user_id:varchar]
+       │      Estimates: {rows: 2834 (23.18kB), cpu: 23.18k, memory: 0B, network: 0B}/{rows: 2834 (23.18kB), cpu: 23.18k, memory: 0B, network: 0B}
+       │      CPU: 142.00ms (44.65%), Scheduled: 751.00ms (45.52%), Blocked: 0.00ns (0.00%), Output: 2834 rows (123.53kB)
+       │      Input avg.: 708.50 rows, Input std.dev.: 172.80%
+       │      user_id := 2:user_id:varchar
+       │      Input: 2834 rows (124.53kB), Filtered: 0.00%, Physical input: 88.13kB, Physical input time: 123.64us, Splits: 4, Splits generation wait time: 871.29ms
+       │      Dynamic filters: 
+       │          - df_373, [ SortedRangeSet[type=varchar, ranges=50, {[09a0a0f6-73b0-4091-b634-c1694f76e388], ..., [f94d6204-6808-493f-9fed-2c43e256a6dc]}] ], collection time=1.29s
+       └─ LocalExchange[partitioning = SINGLE]
+          │   Layout: [user_id_0:varchar, state:varchar]
+          │   Estimates: {rows: 50 (4.02kB), cpu: 0, memory: 0B, network: 0B}
+          │   CPU: 0.00ns (0.00%), Scheduled: 1.00ms (0.06%), Blocked: 197.00ms (1.65%), Output: 50 rows (2.34kB)
+          │   Input avg.: 25.00 rows, Input std.dev.: 12.00%
+          └─ RemoteSource[sourceFragmentIds = [3]]
+                 Layout: [user_id_0:varchar, state:varchar]
+                 CPU: 2.00ms (0.63%), Scheduled: 2.00ms (0.12%), Blocked: 719.00ms (6.03%), Output: 50 rows (2.34kB)
+                 Input avg.: 25.00 rows, Input std.dev.: 12.00%
+
+Fragment 3 [SOURCE]
+    CPU: 14.73ms, Scheduled: 98.73ms, Blocked 0.00ns (Input: 0.00ns, Output: 0.00ns), Input: 50 rows (2.54kB); per task: avg.: 50.00 std.dev.: 0.00, Output: 50 rows (2.54kB)
+    Peak Memory: 3.62kB, Tasks count: 1; per task: max: 3.62kB
+    Output layout: [user_id_0, state]
+    Output partitioning: BROADCAST []
+    TableScan[table = lakehouse:silver.users$data@5180476039568032452]
+        Layout: [user_id_0:varchar, state:varchar]
+        Estimates: {rows: 50 (4.02kB), cpu: 4.02k, memory: 0B, network: 0B}
+        CPU: 15.00ms (4.72%), Scheduled: 99.00ms (6.00%), Blocked: 0.00ns (0.00%), Output: 50 rows (2.54kB)
+        Input avg.: 50.00 rows, Input std.dev.: 0.00%
+        user_id_0 := 1:user_id:varchar
+        state := 9:state:varchar
+        Input: 50 rows (2.54kB), Physical input: 7.26kB, Physical input time: 24.47us, Splits: 1, Splits generation wait time: 195.87ms
+
+
+
+>>> [cellule 11]
+... try:
+...     print(sql("""
+...         SELECT query_id, state, date_diff('millisecond', created, coalesce("end", current_timestamp)) AS elapsed_ms, substr(query, 1, 70) AS query
+...         FROM system.runtime.queries ORDER BY created DESC LIMIT 5
+...     """))
+... except Exception as e:
+...     print("system.runtime.queries refuse :", e)
+                      query_id     state  elapsed_ms                                                                      query
+0  20261108_204033_00015_e8mqi   RUNNING         -82    \n        SELECT query_id, state, date_diff('millisecond', created, coa
+1  20261108_204027_00014_e8mqi  FINISHED        4992  \n    EXPLAIN ANALYZE\n    SELECT u.state, count(*) AS orders\n    FROM l
+2  20261108_204025_00013_e8mqi  FINISHED        2067   \n    EXPLAIN (TYPE DISTRIBUTED)\n    SELECT u.state, count(*) AS orders
+3  20261108_204022_00012_e8mqi  FINISHED         954                            SELECT * FROM lakehouse.silver."orders$history"
+4  20261108_204021_00011_e8mqi  FINISHED        1476     SELECT file_path, file_format, record_count, file_size_in_bytes FROM l
+
+>>> [cellule 12]
+... sql("CREATE SCHEMA IF NOT EXISTS lakehouse.gold")
+... print(sql("SHOW SCHEMAS FROM lakehouse"))
+               Schema
+0                gold
+1  information_schema
+2              silver
+3              system
+
+>>> [cellule 13]
+... print(sql("""
+...     CREATE TABLE lakehouse.gold.orders_by_state_month AS
+...     SELECT
+...         u.state,
+...         date_trunc('month', o.ordered_at) AS month,
+...         count(*)                          AS orders,
+...         sum(o.quantity)                   AS units,
+...         count(DISTINCT o.user_id)         AS buyers
+...     FROM lakehouse.silver.orders AS o
+...     JOIN lakehouse.silver.users  AS u ON u.user_id = o.user_id
+...     GROUP BY 1, 2
+... """))
+... sql("SELECT * FROM lakehouse.gold.orders_by_state_month ORDER BY month, state LIMIT 10")
+   rows
+0    50
+  state                     month  orders  units  buyers
+0    AL 2020-01-01 00:00:00+00:00      65    199       1
+1    AP 2020-01-01 00:00:00+00:00      17     49       1
+2    AS 2020-01-01 00:00:00+00:00      12     40       1
+3    CO 2020-01-01 00:00:00+00:00      17     43       1
+4    FM 2020-01-01 00:00:00+00:00      66    200       1
+5    GA 2020-01-01 00:00:00+00:00       4     12       1
+6    IN 2020-01-01 00:00:00+00:00      49    175       1
+7    KY 2020-01-01 00:00:00+00:00      83    256       1
+8    MH 2020-01-01 00:00:00+00:00      21     57       1
+9    NE 2020-01-01 00:00:00+00:00      11     30       1
+
+>>> [cellule 14]
+... print(sql("""
+...     CREATE TABLE lakehouse.gold.top_products AS
+...     SELECT product, count(*) AS orders, sum(quantity) AS units,
+...            rank() OVER (ORDER BY sum(quantity) DESC) AS units_rank
+...     FROM lakehouse.silver.orders
+...     GROUP BY product
+... """))
+... sql("SELECT * FROM lakehouse.gold.top_products ORDER BY units_rank LIMIT 10")
+   rows
+0     6
+     product  orders  units  units_rank
+0  croissant     491   1523           1
+1      drink     484   1493           2
+2      bread     459   1425           3
+3    brioche     468   1424           4
+4      donut     462   1390           5
+5     cookie     470   1373           6
+
+>>> [cellule 15]
+... print(sql("""
+...     CREATE TABLE lakehouse.gold.user_activity AS
+...     SELECT
+...         u.user_id,
+...         u.state,
+...         date_diff('year', u.birthdate, current_date) AS age,
+...         count(o.order_id)        AS orders,
+...         coalesce(sum(o.quantity), 0) AS units,
+...         min(o.ordered_at)        AS first_order_at,
+...         max(o.ordered_at)        AS last_order_at
+...     FROM lakehouse.silver.users AS u
+...     LEFT JOIN lakehouse.silver.orders AS o ON o.user_id = u.user_id
+...     GROUP BY u.user_id, u.state, u.birthdate
+... """))
+... sql("SELECT * FROM lakehouse.gold.user_activity ORDER BY orders DESC LIMIT 10")
+   rows
+0    50
+                                user_id state  age  orders  units                   first_order_at                    last_order_at
+0  2051acef-097a-4e10-b6fe-bc0e7ecddbaf    VI    9     100    301 2020-03-13 06:21:16.892555+00:00 2020-03-17 09:02:08.476647+00:00
+1  9793b9b4-1374-4146-b2c5-bd89b70b3420    HI   65     100    289 2020-02-06 22:28:23.377915+00:00 2020-02-11 01:57:32.773432+00:00
+2  8d605936-0380-4b70-8d03-c91e4f8d5238    WA   76      99    280 2020-03-06 12:42:24.432345+00:00 2020-03-10 14:46:03.127489+00:00
+3  52828d80-44b5-41f7-97ac-6aa8bb2488a3    IA   35      97    303 2020-02-11 02:16:02.488268+00:00 2020-02-15 02:18:44.854831+00:00
+4  72bb912d-7da6-4785-b63b-4dc3a559e463    NJ   74      97    317 2020-02-15 03:39:36.282921+00:00 2020-02-19 03:23:18.610446+00:00
+5  0dde29a6-baa4-471a-9d24-67ac778eedb3    VI   85      92    285 2020-01-08 11:20:45.094193+00:00 2020-01-12 06:23:02.514874+00:00
+6  97fa7f04-8363-4007-9cae-9610c72c1fe3    AP   52      92    285 2020-03-27 11:09:51.257559+00:00 2020-03-31 06:01:03.068375+00:00
+7  832920b7-c143-4426-b72f-871a45ee432d    HI   51      91    272 2020-04-08 18:29:41.913897+00:00 2020-04-12 12:41:22.197741+00:00
+8  90164161-cfa7-41cd-a631-d00b26d794d3    CA   82      91    270 2020-02-22 14:30:47.467747+00:00 2020-02-26 08:13:22.890319+00:00
+9  d045dd1c-6684-49e3-b1f8-343ea99f1318    UT   33      86    256 2020-03-02 22:15:57.890701+00:00 2020-03-06 11:03:10.312652+00:00
+
+>>> [cellule 16]
+... print(sql("SHOW TABLES FROM lakehouse.gold"))
+... print(sql("""SELECT file_path, record_count, file_size_in_bytes FROM lakehouse.gold."top_products$files" """))
+                   Table
+0  orders_by_state_month
+1           top_products
+2          user_activity
+                                                                                   file_path  record_count  file_size_in_bytes
+0  s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/dat...             6                 760
+
+>>> [cellule 17]
+... silver_units = sql("SELECT sum(quantity) AS v FROM lakehouse.silver.orders").iloc[0, 0]
+... gold_units = sql("SELECT sum(units) AS v FROM lakehouse.gold.orders_by_state_month").iloc[0, 0]
+... product_units = sql("SELECT sum(units) AS v FROM lakehouse.gold.top_products").iloc[0, 0]
+... assert silver_units == gold_units
+... assert silver_units == product_units
+... silver_users = sql("SELECT count(*) AS v FROM lakehouse.silver.users").iloc[0, 0]
+... gold_users = sql("SELECT count(*) AS v FROM lakehouse.gold.user_activity").iloc[0, 0]
+... silver_orders = sql("SELECT count(*) AS v FROM lakehouse.silver.orders").iloc[0, 0]
+... gold_orders = sql("SELECT sum(orders) AS v FROM lakehouse.gold.user_activity").iloc[0, 0]
+... assert silver_users == gold_users
+... assert silver_orders == gold_orders
+... print("asserts OK", silver_units, silver_users, silver_orders)
+asserts OK 8628 50 2834
+
+>>> [cellule 18]
+... sql("DELETE FROM lakehouse.gold.top_products")
+... sql("""
+...     INSERT INTO lakehouse.gold.top_products
+...     SELECT product, count(*), sum(quantity), rank() OVER (ORDER BY sum(quantity) DESC)
+...     FROM lakehouse.silver.orders
+...     GROUP BY product
+... """)
+... sql("""SELECT snapshot_id, committed_at, operation FROM lakehouse.gold."top_products$snapshots" ORDER BY committed_at""")
+           snapshot_id                  committed_at operation
+0  5728436752750004236 2026-11-08 20:40:55.725+00:00    append
+1  6065897832347918383 2026-11-08 20:41:17.186+00:00    delete
+2  7906888402579192158 2026-11-08 20:41:20.985+00:00    append
+
+>>> [cellule 19]
+... first = sql("""SELECT snapshot_id FROM lakehouse.gold."top_products$snapshots" ORDER BY committed_at LIMIT 1""").iloc[0, 0]
+... print(sql(f"SELECT count(*) AS products FROM lakehouse.gold.top_products FOR VERSION AS OF {first}"))
+... print(sql("SELECT count(*) AS products FROM lakehouse.gold.top_products"))
+   products
+0         6
+   products
+0         6
+
+>>> [cellule 20]
+... # ===== Exercice 1 : table partitionnee par mois
+... print(sql("""
+...     CREATE TABLE lakehouse.gold.orders_by_state_month_part
+...     WITH (partitioning = ARRAY['month(month)']) AS
+...     SELECT * FROM lakehouse.gold.orders_by_state_month
+... """))
+... print(sql('SELECT partition, record_count, file_size_in_bytes FROM lakehouse.gold."orders_by_state_month_part$files"'))
+... print(sql('SELECT record_count, file_size_in_bytes FROM lakehouse.gold."orders_by_state_month$files"'))
+... for t in ["orders_by_state_month", "orders_by_state_month_part"]:
+...     p = sql(f"EXPLAIN ANALYZE SELECT sum(units) FROM lakehouse.gold.{t} WHERE month = TIMESTAMP '2020-02-01 00:00:00 UTC'").iloc[0, 0]
+...     print(t, input_lines(p))
+   rows
+0    50
+            partition  record_count  file_size_in_bytes
+0  (month_month: 601)            10                 954
+1  (month_month: 602)            13                 992
+2  (month_month: 600)            17                1053
+3  (month_month: 603)            10                 969
+   record_count  file_size_in_bytes
+0            50                1371
+orders_by_state_month ['CPU: 3.88ms, Scheduled: 3.99ms, Blocked 1.50s (Input: 691.97ms, Output: 0.00ns), Input: 1 row (9B); per task: avg.: 1.00 std.dev.: 0.00, Output: 1 row (9B)', 'CPU: 16.10ms, Scheduled: 77.40ms, Blocked 0.00ns (Input: 0.00ns, Output: 0.00ns), Input: 50 rows (1.06kB); per task: avg.: 50.00 std.dev.: 0.00, Output: 1 row (9B)', "└─ ScanFilterProject[table = lakehouse:gold.orders_by_state_month$data@9100750026128971426, filterPredicate = (month = timestamp(6) with time zone '2020-02-01 00:00:00.000000 UTC')]", 'Input: 50 rows (1.06kB), Filtered: 80.00%, Physical input: 1.34kB, Physical input time: 16.69us, Splits: 1, Splits generation wait time: 297.68ms']
+orders_by_state_month_part ['CPU: 3.35ms, Scheduled: 3.47ms, Blocked 1.18s (Input: 786.03ms, Output: 0.00ns), Input: 1 row (9B); per task: avg.: 1.00 std.dev.: 0.00, Output: 1 row (9B)', 'CPU: 25.55ms, Scheduled: 187.87ms, Blocked 0.00ns (Input: 0.00ns, Output: 0.00ns), Input: 10 rows (220B); per task: avg.: 10.00 std.dev.: 0.00, Output: 1 row (9B)', "└─ ScanFilterProject[table = lakehouse:gold.orders_by_state_month_part$data@3977673318601329358, filterPredicate = (month = timestamp(6) with time zone '2020-02-01 00:00:00.000000 UTC')]", 'Input: 10 rows (220B), Filtered: 0.00%, Physical input: 954B, Physical input time: 16.75us, Splits: 1, Splits generation wait time: 187.88ms']
+
+>>> [cellule 21]
+... # ===== Exercice 2 : cohortes par decennie de naissance
+... print(sql("""
+...     CREATE TABLE lakehouse.gold.cohorts AS
+...     SELECT
+...         (year(u.birthdate) / 10) * 10             AS birth_decade,
+...         count(DISTINCT u.user_id)                 AS users,
+...         count(o.order_id)                         AS orders,
+...         round(avg(CAST(o.quantity AS double)), 2) AS avg_units_per_order
+...     FROM lakehouse.silver.users AS u
+...     LEFT JOIN lakehouse.silver.orders AS o ON o.user_id = u.user_id
+...     GROUP BY 1
+... """))
+... sql("SELECT * FROM lakehouse.gold.cohorts ORDER BY birth_decade")
+   rows
+0    11
+    birth_decade  users  orders  avg_units_per_order
+0           1910      1      47                 3.19
+1           1930      5     202                 3.11
+2           1940      4     274                 3.07
+3           1950      6     340                 3.01
+4           1960      8     433                 3.02
+5           1970      5     369                 2.99
+6           1980      2      81                 2.79
+7           1990      5     402                 3.07
+8           2000      4     154                 2.99
+9           2010      5     244                 3.08
+10          2020      5     288                 3.12
+
+>>> [cellule 22]
+... # ===== Exercice 5 : comparaison avec la meme agregation faite par Spark connecte a Polaris
+... spark_rows, spark_orders, spark_units = open("/home/onyxia/work/labkit/lab10_spark_result.txt").read().split()
+... trino = sql("SELECT count(*) AS n, sum(orders) AS orders, sum(units) AS units FROM lakehouse.gold.orders_by_state_month").iloc[0]
+... print("Spark :", spark_rows, spark_orders, spark_units, "| Trino :", trino["n"], trino["orders"], trino["units"])
+Spark : 50 2834 8628 | Trino : 50 2834 8628
+
+>>> [cellule 23]
+... # ===== Exercice 4 : OPTIMIZE
+... print(sql('SELECT snapshot_id, operation FROM lakehouse.gold."top_products$snapshots" ORDER BY committed_at'))
+... print(sql('SELECT file_path, record_count FROM lakehouse.gold."top_products$files"'))
+... sql("ALTER TABLE lakehouse.gold.top_products EXECUTE optimize")
+... print(sql('SELECT snapshot_id, operation FROM lakehouse.gold."top_products$snapshots" ORDER BY committed_at'))
+... print(sql('SELECT file_path, record_count FROM lakehouse.gold."top_products$files"'))
+           snapshot_id operation
+0  5728436752750004236    append
+1  6065897832347918383    delete
+2  7906888402579192158    append
+                                                                                   file_path  record_count
+0  s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/dat...             6
+           snapshot_id operation
+0  5728436752750004236    append
+1  6065897832347918383    delete
+2  7906888402579192158    append
+                                                                                   file_path  record_count
+0  s3://user-m-anane-ece/warehouse/gold/top_products-d813eb9fbb554653a9be588b11d69a06/dat...             6
+
+>>> [cellule 24]
+... # ===== Exercice 3 : une commande de plus dans silver, MERGE du gold, time travel
+... gold_first = sql('SELECT snapshot_id FROM lakehouse.gold."orders_by_state_month$snapshots" ORDER BY committed_at DESC LIMIT 1').iloc[0, 0]
+... sql("""
+...     INSERT INTO lakehouse.silver.orders (order_id, user_id, ordered_at, quantity, product)
+...     SELECT CAST(uuid() AS varchar), user_id, ordered_at, 5, product
+...     FROM lakehouse.silver.orders
+...     WHERE ordered_at = (SELECT min(ordered_at) FROM lakehouse.silver.orders)
+... """)
+... print(sql("SELECT count(*) AS orders FROM lakehouse.silver.orders"))
+... sql("""
+...     MERGE INTO lakehouse.gold.orders_by_state_month AS t
+...     USING (
+...         SELECT u.state, date_trunc('month', o.ordered_at) AS month,
+...                count(*) AS orders, sum(o.quantity) AS units, count(DISTINCT o.user_id) AS buyers
+...         FROM lakehouse.silver.orders AS o
+...         JOIN lakehouse.silver.users  AS u ON u.user_id = o.user_id
+...         GROUP BY 1, 2
+...     ) AS s
+...     ON t.state = s.state AND t.month = s.month
+...     WHEN MATCHED AND (t.orders <> s.orders OR t.units <> s.units OR t.buyers <> s.buyers)
+...         THEN UPDATE SET orders = s.orders, units = s.units, buyers = s.buyers
+...     WHEN NOT MATCHED THEN INSERT (state, month, orders, units, buyers) VALUES (s.state, s.month, s.orders, s.units, s.buyers)
+... """)
+... print(sql('SELECT snapshot_id, committed_at, operation FROM lakehouse.gold."orders_by_state_month$snapshots" ORDER BY committed_at'))
+... print(sql(f"SELECT sum(orders) AS orders, sum(units) AS units FROM lakehouse.gold.orders_by_state_month FOR VERSION AS OF {gold_first}"))
+... print(sql("SELECT sum(orders) AS orders, sum(units) AS units FROM lakehouse.gold.orders_by_state_month"))
+   orders
+0    2835
+           snapshot_id                  committed_at  operation
+0  9100750026128971426 2026-11-08 20:40:48.082+00:00     append
+1  5619459614434794671 2026-11-08 20:42:01.249+00:00  overwrite
+   orders  units
+0    2834   8628
+   orders  units
+0    2835   8633
+$ git add pyproject.toml uv.lock
+$ git commit -m 'feat: trino dependency added'
+[main a8b1be9] feat: trino dependency added
+ 2 files changed, 269 insertions(+)
+$ true
+EXIT_CODE=0
